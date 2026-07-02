@@ -1,0 +1,77 @@
+# Implementation Plan - Git-Driven Code Generation Milestones
+
+This plan outlines the code generation stages for **IoT-Link**, utilizing a Git flow branching model starting from the `develop` branch. 
+
+## Git Flow Guidelines
+1. **Branching**: For each milestone, we will branch off `develop` into a dedicated feature branch: `feature/<milestone-name>`.
+2. **Milestone Approvals**: Before merging a feature branch back into `develop`, we will perform verification steps.
+3. **Commit Messages**: Commits will follow Conventional Commits format (e.g., `feat(service):`, `fix(ui):`, `test:`).
+
+---
+
+## Proposed Milestones
+
+### 🏁 Milestone 1: App Onboarding Walkthrough (Feature Tour)
+* **Branch**: `feature/app-onboarding`
+* **Commit Message**: `feat(onboarding): implement onboarding walkthrough flow and local state persistence`
+* **Rationale**: Simplest end-to-end slice — validates the full Flow → Module → Service wiring pattern without BLE complexity. Matches the user's actual journey (onboarding before any device interaction).
+* **Changes**:
+  * Build the welcome walkthrough pages inside the `Onboarding` module.
+  * Update `AccountService` to persist `isAppOnboarded` state across launches using `UserDefaults`.
+  * Wire up the coordinator steps transition in `OnboardingFlow` to route back to `AppFlow` once onboarding completes.
+
+### 🏁 Milestone 2: Bluetooth Central Service Core
+* **Branch**: `feature/bluetooth-central-service`
+* **Commit Message**: `feat(service): implement BluetoothCentralService and Swinject registration`
+* **Changes**:
+  * Create `BluetoothCentralService.swift` under `Services/` to encapsulate `CBCentralManager` logic on the private background serial dispatch queue.
+  * Implement scanning, peripheral connection, service/characteristic discovery, and state notifications.
+  * Integrate and register the service inside `ServiceAssembly.swift`.
+
+### 🏁 Milestone 3: IoT-Device macOS Simulator Target
+* **Branch**: `feature/device-simulator`
+* **Commit Message**: `feat(simulator): add macOS command-line utility peripheral target`
+* **Rationale**: The simulator must exist before provisioning and telemetry can be tested end-to-end. Building it early prevents developing BLE features blind.
+* **Changes**:
+  * Add a new Target `iot-link-simulator` (macOS Command Line Tool) to the Xcode workspace.
+  * Implement `CBPeripheralManager` to advertise `SmartDeviceService`.
+  * Write logic to handle and log incoming provisioning credential packets.
+  * Implement mocked periodic telemetry streams and support read/write LED requests.
+
+### 🏁 Milestone 4: BLE Device Provisioning Flow
+* **Branch**: `feature/ble-provisioning`
+* **Commit Message**: `feat(provisioning): implement ProvisioningFlow coordinator and Wi-Fi credential binary serialization`
+* **Changes**:
+  * Create `ProvisioningFlow` coordinator.
+  * Create `ProvisioningViewModel` and `ProvisioningViewController` showing scanning lists and Wi-Fi inputs.
+  * Implement byte serialization logic mapping `[SSID Length] + [Password Length] + [SSID Data] + [Password Data]` to be written to characteristic `E0C00002-C3B6-4B22-9F1C-123456789ABC`.
+  * Handle the provisioning notification handshake response from the peripheral.
+
+### 🏁 Milestone 5: Telemetry Dashboard & Control UI
+* **Branch**: `feature/telemetry-dashboard`
+* **Commit Message**: `feat(dashboard): implement telemetry decoding and live dashboard UI`
+* **Changes**:
+  * Update `HomeViewModel` to bind to `BluetoothCentralService` streams.
+  * Implement raw Big-Endian Int16 parsing using `withUnsafeBytes` to decode Temperature & Humidity values.
+  * Build the SwiftUI gauge/graph indicators inside `HomeView`.
+  * Add a toggle control to write `0x01` / `0x00` without response to the LED status characteristic.
+  * Handle the empty/disconnected state with a prompt and "Add Device" button.
+
+### 🏁 Milestone 6: Resiliency & Unit Tests
+* **Branch**: `feature/tests-and-resiliency`
+* **Commit Message**: `feat(resiliency): implement exponential back-off reconnection and add unit tests`
+* **Changes**:
+  * Add the exponential back-off reconnection scheduling algorithm inside the `BluetoothCentralService`.
+  * Add unit tests for packet serialization/deserialization.
+  * Add unit tests for back-off delay calculations.
+  * Add unit tests for `AccountService` persistence logic.
+
+---
+
+## Verification Plan
+
+For each feature branch before merging to `develop`:
+1. Compile all targets to ensure zero build errors.
+2. Run Xcode unit tests (where applicable for the milestone).
+3. For BLE milestones (3–5): validate communication logs between the iOS client and macOS CLI simulator, confirming byte-level correctness of the GATT transactions.
+4. Capture simulator console output demonstrating the provisioning handshake and telemetry stream as evidence of end-to-end correctness.

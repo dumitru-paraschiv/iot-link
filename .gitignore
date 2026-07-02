@@ -1,0 +1,87 @@
+# == macOS ==
+.DS_Store
+
+# == Xcode ==
+*.pbxuser
+!default.pbxuser
+*.mode1v3
+!default.mode1v3
+*.mode2v3
+!default.mode2v3
+*.perspectivev3
+!default.perspectivev3
+xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+*.moved-aside
+*.xccheckout
+DerivedData/
+build/
+*.hmap
+
+# == Swift Package Manager ==
+.build/
+.swiftpm/
+
+# == CocoaPods ==
+Pods/
+!Podfile.lock
+
+# == Fastlane ==
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots
+fastlane/test_output
+
+# == Artifacts & Archives ==
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# == Logs ==
+*.log
+
+# == Ruby/Bundler (optional) ==
+vendor/bundle/
+
+# == Code signing & Secrets ==
+*.cer
+*.mobileprovision
+*.provisionprofile
+*.p12
+*.key
+Config.xcconfig
+*.secret
+*.local
+
+# == Project-specific rules ==
+*.xcodeproj/*
+!*.xcodeproj/project.pbxproj
+!*.xcodeproj/xcshareddata/
+!*.xcodeproj/project.xcworkspace/
+*.xcworkspace/xcuserdata/
+Packages/
+fastlane/screenshots/**/*.png
+*.gcov
+*.gcno
+*.gcda
+*.swp
+*.swo
+*~
+*.xcarchive
+*.xcworkspace
+!default.xcworkspace
+/.build/
+/Packages/
+fastlane/test_output/
+*.lock
+*.DS_Store
+*.idea/
+*.env
+*.orig
+*.bak
+.env
+.env.*
+
+# == Claude ==
+.claude/
