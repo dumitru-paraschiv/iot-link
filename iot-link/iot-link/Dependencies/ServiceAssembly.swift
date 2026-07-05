@@ -14,5 +14,10 @@ final class ServiceAssembly: Assembly {
             DefaultAccountService()
         }
         .inObjectScope(.container)
+        
+        container.register(BluetoothCentralService.self) { r in
+            DefaultBluetoothCentralService()
+        }
+        .inObjectScope(.container)
     }
 }

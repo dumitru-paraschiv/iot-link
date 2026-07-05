@@ -24,13 +24,21 @@ This plan outlines the code generation stages for **IoT-Link**, utilizing a Git 
   * Wired coordinator steps transition in `OnboardingFlow` (hidden navigation bar) to route back to `AppFlow` once onboarding completes.
   * Added a subtle dismiss (x-mark) button for skipping onboarding directly.
 
-### 🏁 Milestone 2: Bluetooth Central Service Core
+### ✅ Milestone 2: Bluetooth Central Service Core
 * **Branch**: `feature/bluetooth-central-service`
 * **Commit Message**: `feat(service): implement BluetoothCentralService and Swinject registration`
+* **Scope**: Reaches the `.connected` state (services + characteristics discovered & cached). Characteristic I/O is deferred — telemetry subscribe/parse and LED read/write are Milestone 5, Wi-Fi credential writes Milestone 4, exponential back-off reconnection Milestone 6.
 * **Changes**:
-  * Create `BluetoothCentralService.swift` under `Services/` to encapsulate `CBCentralManager` logic on the private background serial dispatch queue.
-  * Implement scanning, peripheral connection, service/characteristic discovery, and state notifications.
-  * Integrate and register the service inside `ServiceAssembly.swift`.
+  * Added `Services/Bluetooth/` mirroring the per-service folder layout:
+    * `BluetoothCentralService.swift` — protocol + `actor DefaultBluetoothCentralService` owning the `CBCentralManager`, connection state machine, and discovery caches.
+    * `CentralDelegateProxy.swift` — a `nonisolated` NSObject bridging `CBCentralManagerDelegate`/`CBPeripheralDelegate` callbacks into the actor via `@Sendable` closures.
+    * `GATTProfile.swift` — type-safe `CBUUID` namespace for the service + three characteristics (per `GATT_SPEC.md`).
+    * `BluetoothModels.swift` — Sendable `BluetoothState` enum and `DiscoveredPeripheral`, keeping `CBPeripheral` out of the ViewModel layer.
+  * Added `Common/Types/UncheckedSendable.swift` — a transfer box for moving non-`Sendable` CoreBluetooth objects across the isolation boundary.
+  * Exposed state via Combine `CurrentValueSubject`-backed publishers (current-value replay), consistent with the `steps` subject pattern. `AsyncStream` is reserved for the telemetry stream in Milestone 5.
+  * Registered `BluetoothCentralService` in `ServiceAssembly.swift` with `.container` scope (shared singleton).
+  * Added `NSBluetoothAlwaysUsageDescription` to `Info.plist` (required before the permission prompt).
+  * Marked shared value utilities (`Optional`, `Sequence` extensions) `nonisolated` so the actor compiles warning-free under the project's `-default-isolation=MainActor` setting.
 
 ### 🏁 Milestone 3: IoT-Device macOS Simulator Target
 * **Branch**: `feature/device-simulator`

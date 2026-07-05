@@ -2,7 +2,7 @@
 
 This document details the architectural guidelines, concurrency models, dependency injection layout, and resilience mechanisms implemented in the **IoT-Link** ecosystem.
 
-> **Note:** This document describes the target architecture. Some components (e.g., `BluetoothCentralService`, `ProvisioningFlow`) are designed but not yet implemented in the codebase.
+> **Note:** This document describes the target architecture. The onboarding module and `BluetoothCentralService` (scan → connect → discover) are implemented; components such as `ProvisioningFlow` and the telemetry dashboard are designed but not yet built.
 
 ---
 
@@ -131,23 +131,39 @@ Both Views and Flows expose a Combine `PassthroughSubject` named `steps`. A View
 
 ## 🧵 Concurrency & Thread Safety
 
-`CoreBluetooth` is notorious for blocking UI drawing thread cycles if callbacks execute on the Main Queue. The architecture enforces strict queue separation:
+`CoreBluetooth` is notorious for blocking UI drawing thread cycles if callbacks execute on the Main Queue. Compounding this, the project builds with `-default-isolation=MainActor` (Swift's approachable-concurrency mode), so any unannotated type is inferred `@MainActor` — which collides with CoreBluetooth's background delegate callbacks. The `BluetoothCentralService` resolves both with an **actor + delegate-proxy** design.
 
-### 1. Private Central Queue
-All `CBCentralManager` events and delegate callbacks run on a dedicated background dispatch queue.
+### 1. Actor-Owned Central
+`DefaultBluetoothCentralService` is an `actor` that owns the `CBCentralManager`, the connection state machine, the discovered-peripheral map, and the cached characteristics. All CoreBluetooth *calls* (`scanForPeripherals`, `connect`, `discoverServices`, …) are made from actor-isolated methods, and the manager runs on a dedicated background queue.
 ```swift
-let centralQueue = DispatchQueue(label: "com.iotlink.bluetooth.central", qos: .userInitiated)
-centralManager = CBCentralManager(delegate: self, queue: centralQueue)
+private let centralQueue = DispatchQueue(label: "com.iotlink.bluetooth.central", qos: .userInitiated)
+private let proxy = CentralDelegateProxy()
+
+init() {
+    centralManager = CBCentralManager(delegate: proxy, queue: centralQueue)
+    wireProxy()
+}
 ```
 
-### 2. Thread Transition Boundary
-To prevent UI stuttering and data-race warnings, the transition from background threads to UI updates is managed strictly via Swift Concurrency `@MainActor` annotations:
-* **Background Process**: Raw byte slicing, parsing, and endianness conversions occur inside `BluetoothCentralService` on the background queue.
-* **Stream Bridge**: The service exposes states via Combine `Publisher` or `AsyncStream`.
-* **Main Actor Transition**: The ViewModels receive these updates and compile them for the views inside tasks scheduled explicitly on the `@MainActor`.
-
+### 2. `nonisolated` Delegate Proxy
+CoreBluetooth's delegate callbacks fire on the central queue, so they cannot be handled directly by a `@MainActor`-inferred type. A thin `nonisolated` NSObject — `CentralDelegateProxy` — conforms to `CBCentralManagerDelegate`/`CBPeripheralDelegate` and forwards each callback to a `@Sendable` closure the actor installs at construction. Non-`Sendable` CoreBluetooth objects (`CBPeripheral`, `CBService`) are wrapped in `UncheckedSendable` to cross the boundary; the invariant is that they are only ever dereferenced on the central queue or the actor's executor.
 ```swift
-// Bridging CoreBluetooth queue to UI Main Actor
+proxy.onDiscover = { [weak self] peripheral, rssi in
+    Task { await self?.handleDiscover(peripheral.value, rssi: rssi) }
+}
+```
+
+### 3. State Exposure via Combine
+The service exposes state through `CurrentValueSubject`-backed publishers (so late subscribers replay the latest value), mirroring the `steps` subject pattern used across the codebase. The subjects are `nonisolated(unsafe)` and only ever `send(...)` from inside the actor. An `AsyncStream` is reserved for the high-frequency telemetry stream in a later milestone.
+```swift
+nonisolated var statePublisher: AnyPublisher<BluetoothState, Never> {
+    stateSubject.eraseToAnyPublisher()
+}
+```
+
+### 4. Main Actor Transition
+ViewModels (already `@MainActor`) subscribe to these publishers and route updates into their model through named setters, keeping the model's stored properties `private(set)`.
+```swift
 func subscribeToTelemetry() {
     Task { @MainActor in
         for await telemetry in bluetoothService.telemetryStream {
@@ -159,6 +175,8 @@ func subscribeToTelemetry() {
 }
 ```
 
+> **Convention:** shared, thread-agnostic helpers (e.g. `Optional`/`Sequence` extensions, `trace`, the `UserDefaults` wrappers) are explicitly marked `nonisolated` so they remain callable from any isolation domain rather than being inferred `@MainActor`.
+
 ---
 
 ## 💉 Dependency Injection (Swinject)
@@ -166,7 +184,7 @@ func subscribeToTelemetry() {
 Dependencies are registered in `ServiceAssembly.swift` and resolved dynamically through a container to prevent tight coupling.
 
 * `BluetoothCentralService` is registered in `ServiceAssembly` with `.container` scope (acting as a shared singleton service during the app's lifecycle).
-* `ProvisioningViewModel` and `HomeViewModel` declare `BluetoothCentralService` as a constructor parameter.
+* Consuming ViewModels (`ProvisioningViewModel`, `HomeViewModel`) will declare `BluetoothCentralService` as a constructor parameter once those modules are wired in later milestones.
 
 ```swift
 // ServiceAssembly.swift

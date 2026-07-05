@@ -8,12 +8,12 @@
 public extension Optional {
     
     @inline(__always)
-    var isNone: Bool {
+    nonisolated var isNone: Bool {
         self == nil
     }
     
     @inline(__always)
-    var isSome: Bool {
+    nonisolated var isSome: Bool {
         self != nil
     }
 }
@@ -21,7 +21,7 @@ public extension Optional {
 public extension Optional where Wrapped: ExpressibleByBooleanLiteral {
     
     @inline(__always)
-    var orFalse: Wrapped {
+    nonisolated var orFalse: Wrapped {
         self ?? false
     }
 }
@@ -29,7 +29,7 @@ public extension Optional where Wrapped: ExpressibleByBooleanLiteral {
 public extension Optional where Wrapped: ExpressibleByArrayLiteral {
     
     @inline(__always)
-    var orEmpty: Wrapped {
+    nonisolated var orEmpty: Wrapped {
         self ?? []
     }
 }
