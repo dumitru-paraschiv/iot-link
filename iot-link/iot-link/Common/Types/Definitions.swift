@@ -7,3 +7,5 @@
 
 typealias Callback<T> = (T) -> Void
 typealias EmptyCallback = () -> Void
+
+typealias SendableCallback<T> = @Sendable (T) -> Void
