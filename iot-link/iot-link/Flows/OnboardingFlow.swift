@@ -36,6 +36,6 @@ private extension DefaultOnboardingFlow {
             }
         }
         .store(in: &view.stepsBag)
-        setRoot(view)
+        setRoot(view, showTopBar: false)
     }
 }

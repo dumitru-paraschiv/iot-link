@@ -18,6 +18,14 @@ public extension Optional {
     }
 }
 
+public extension Optional where Wrapped: ExpressibleByBooleanLiteral {
+    
+    @inline(__always)
+    var orFalse: Wrapped {
+        self ?? false
+    }
+}
+
 public extension Optional where Wrapped: ExpressibleByArrayLiteral {
     
     @inline(__always)

@@ -76,6 +76,59 @@ The application's navigation is divided into clear, single-responsibility coordi
 
 ---
 
+## 🧩 Module Pattern (Action-Driven MVVM)
+
+Each UI module (`Onboarding`, `Home`, `Settings`, …) follows a strict unidirectional data-flow contract built from four files: `*Model`, `*View` (protocols), `*ViewModel`, and `*ViewController` (which also hosts the SwiftUI `*ViewUI`).
+
+### 1. View ↔ ViewModel Contract
+The View and ViewModel communicate only through `Input`/`Output` protocols — never by holding concrete references. The `ViewController` conforms to the `Output` side; the `ViewModel` conforms to the `Input` side and is bound via `bind(output:)`.
+
+```swift
+protocol OnboardingViewInput {
+    func bind(output: OnboardingViewOutput)
+    func send(_ action: OnboardingViewAction)
+}
+
+protocol OnboardingViewOutput: AnyObject {
+    var steps: PassthroughSubject<OnboardingViewSteps, Never> { get }
+}
+```
+
+### 2. Unidirectional Actions
+The View never mutates state directly. Every user intent is expressed as an `Action` enum case and dispatched through a single `send(_:)` entry point. The ViewModel is the only writer of the `Model`, whose stored properties are `private(set)` and mutated exclusively through named setters.
+
+```swift
+enum OnboardingViewAction {
+    case completeOnboardingTapped
+    case nextPageTapped
+    case set(currentPageIndex: Int)
+    case viewDidLoad
+}
+
+func send(_ action: OnboardingViewAction) {
+    switch action {
+    case .completeOnboardingTapped: handleCompleteOnboardingTapped()
+    case .nextPageTapped: handleNextPageTapped()
+    case let .set(currentPageIndex): model.set(currentPageIndex: currentPageIndex)
+    case .viewDidLoad: break
+    }
+}
+```
+
+Even SwiftUI two-way bindings are funneled through actions rather than mutating the model directly:
+
+```swift
+TabView(selection: Binding(
+    get: { viewModel.model.currentPageIndex },
+    set: { viewModel.send(.set(currentPageIndex: $0)) }
+)) { … }
+```
+
+### 3. Flow Coordination via `steps`
+Both Views and Flows expose a Combine `PassthroughSubject` named `steps`. A ViewModel signals navigation-worthy events (e.g. `.finished`) up to its owning Flow, which decides where to route next — keeping navigation logic out of the module entirely.
+
+---
+
 ## 🧵 Concurrency & Thread Safety
 
 `CoreBluetooth` is notorious for blocking UI drawing thread cycles if callbacks execute on the Main Queue. The architecture enforces strict queue separation:
@@ -98,9 +151,9 @@ To prevent UI stuttering and data-race warnings, the transition from background 
 func subscribeToTelemetry() {
     Task { @MainActor in
         for await telemetry in bluetoothService.telemetryStream {
-            // updates observable state safely on @MainActor
-            self.model.currentTemperature = telemetry.temperature
-            self.model.currentHumidity = telemetry.humidity
+            // Mutation is routed through a named setter on the model,
+            // keeping its stored properties `private(set)`.
+            model.set(telemetry: telemetry)
         }
     }
 }
@@ -121,6 +174,32 @@ container.register(BluetoothCentralService.self) { r in
     DefaultBluetoothCentralService()
 }
 .inObjectScope(.container)
+```
+
+### Naming Convention: `Default<Protocol>`
+Every injectable dependency is defined as a protocol, with its production implementation prefixed `Default` — e.g. `AccountService` → `DefaultAccountService`, `AppFlow` → `DefaultAppFlow`, `OnboardingFlow` → `DefaultOnboardingFlow`. Consumers depend only on the protocol, so the concrete type is swappable (e.g. with a mock) purely through the assembly registration.
+
+---
+
+## 🏭 Model Construction (Builder Pattern)
+
+Model default state is produced by a dedicated caseless-`enum` builder rather than inline literals, keeping the `Model` declarative and its seed data easy to swap or mock. The model exposes the builder via a `static let builder` alias and defaults its initializer parameters to the builder's output.
+
+```swift
+struct OnboardingModel {
+    private(set) var currentPageIndex: Int
+    private(set) var pages: [Page]
+
+    init(currentPageIndex: Int = 0,
+         pages: [Page] = Self.builder.makeDefaultPages()) {
+        self.currentPageIndex = currentPageIndex
+        self.pages = pages
+    }
+}
+
+enum OnboardingModelBuilder {
+    static func makeDefaultPages() -> [OnboardingModel.Page] { … }
+}
 ```
 
 ---
