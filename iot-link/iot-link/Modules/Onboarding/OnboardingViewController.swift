@@ -24,17 +24,38 @@ struct OnboardingViewUI: View {
     var viewModel: OnboardingViewModel
     
     var body: some View {
-        VStack(spacing: 20) {
-            Text("Welcome to the App!")
-                .font(.largeTitle)
-            
-            Button("Complete Onboarding") {
-                viewModel.send(.completeOnboardingTapped)
+        VStack(spacing: 24) {
+            TabView(selection: Binding(
+                get: { viewModel.model.currentPageIndex },
+                set: { viewModel.send(.set(currentPageIndex: $0)) }
+            )) {
+                ForEach(viewModel.model.pages) { page in
+                    OnboardingViewComponents.PageCard(page: page)
+                        .frame(minHeight: .zero, maxHeight: .infinity)
+                        .tag(page.id)
+                }
             }
-            .padding()
-            .background(Color.blue)
-            .foregroundColor(.white)
-            .cornerRadius(8)
+            .tabViewStyle(.page(indexDisplayMode: .never))
+            .animation(.smooth, value: viewModel.model.currentPageIndex)
+            
+            OnboardingViewComponents.PageIndicator(
+                pages: viewModel.model.pages,
+                currentPageIndex: viewModel.model.currentPageIndex
+            )
+            
+            OnboardingViewComponents.ActionButton(
+                isLastPage: viewModel.model.isLastPage,
+                tapAction: { viewModel.send(.nextPageTapped) }
+            )
+            .padding(.horizontal, 48)
+        }
+        .padding(.bottom, 64)
+        .overlay(alignment: .topTrailing) {
+            OnboardingViewComponents.DismissButton(
+                tapAction: { viewModel.send(.completeOnboardingTapped) }
+            )
+            .padding(.top, 16)
+            .padding(.trailing, 20)
         }
     }
 }

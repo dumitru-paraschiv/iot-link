@@ -20,6 +20,8 @@ protocol OnboardingViewOutput: AnyObject {
 enum OnboardingViewAction {
     
     case completeOnboardingTapped
+    case nextPageTapped
+    case set(currentPageIndex: Int)
     case viewDidLoad
 }
 

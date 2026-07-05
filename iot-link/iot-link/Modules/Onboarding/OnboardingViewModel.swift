@@ -12,7 +12,7 @@ import Observation
 @Observable
 final class OnboardingViewModel {
     
-    private(set) var model: OnboardingModel
+    var model: OnboardingModel
     
     private weak var output: OnboardingViewOutput?
     private let accountService: AccountService
@@ -25,13 +25,24 @@ final class OnboardingViewModel {
     
     func send(_ action: OnboardingViewAction) {
         switch action {
-        case .viewDidLoad: break
         case .completeOnboardingTapped: handleCompleteOnboardingTapped()
+        case .nextPageTapped: handleNextPageTapped()
+        case let .set(currentPageIndex): model.set(currentPageIndex: currentPageIndex)
+        case .viewDidLoad: break
         }
     }
 }
 
 private extension OnboardingViewModel {
+    
+    func handleNextPageTapped() {
+        if model.isLastPage {
+            handleCompleteOnboardingTapped()
+        } else {
+            let nextPageIndex = model.currentPageIndex + 1
+            model.set(currentPageIndex: nextPageIndex)
+        }
+    }
     
     func handleCompleteOnboardingTapped() {
         Task { @MainActor in

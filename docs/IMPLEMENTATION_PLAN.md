@@ -11,14 +11,18 @@ This plan outlines the code generation stages for **IoT-Link**, utilizing a Git 
 
 ## Proposed Milestones
 
-### 🏁 Milestone 1: App Onboarding Walkthrough (Feature Tour)
+### ✅ Milestone 1: App Onboarding Walkthrough (Feature Tour)
 * **Branch**: `feature/app-onboarding`
 * **Commit Message**: `feat(onboarding): implement onboarding walkthrough flow and local state persistence`
 * **Rationale**: Simplest end-to-end slice — validates the full Flow → Module → Service wiring pattern without BLE complexity. Matches the user's actual journey (onboarding before any device interaction).
 * **Changes**:
-  * Build the welcome walkthrough pages inside the `Onboarding` module.
-  * Update `AccountService` to persist `isAppOnboarded` state across launches using `UserDefaults`.
-  * Wire up the coordinator steps transition in `OnboardingFlow` to route back to `AppFlow` once onboarding completes.
+  * Built a 3-page walkthrough (BLE, Provisioning, Telemetry) using `TabView` with paged style inside the `Onboarding` module.
+  * Extracted reusable view components into `OnboardingViewComponents` (PageCard, PageIndicator, ActionButton, DismissButton).
+  * Added `OnboardingModel` with `Page` struct, `OnboardingModelBuilder` for default page construction, and mutation via named setters.
+  * Updated `AccountService` to persist `isAppOnboarded` state via type-safe `UserDefaults` extension with enum-based keys and tracing.
+  * Added `Optional.orFalse` convenience and `UserDefaults+Extensions` with generic typed get/set/remove.
+  * Wired coordinator steps transition in `OnboardingFlow` (hidden navigation bar) to route back to `AppFlow` once onboarding completes.
+  * Added a subtle dismiss (x-mark) button for skipping onboarding directly.
 
 ### 🏁 Milestone 2: Bluetooth Central Service Core
 * **Branch**: `feature/bluetooth-central-service`
