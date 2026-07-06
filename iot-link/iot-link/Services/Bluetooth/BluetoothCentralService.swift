@@ -21,6 +21,15 @@ protocol BluetoothCentralService: Sendable {
     func stopScanning() async
     func connect(to id: UUID) async
     func disconnect() async
+    
+    /// Writes Wi-Fi credentials to the provisioning characteristic and awaits the
+    /// peripheral's status-byte handshake notification.
+    ///
+    /// - Returns: the peripheral's `ProvisioningStatus` (e.g. `.success`, `.invalidPayload`).
+    /// - Throws: `ProvisioningError` if the device is not ready, the credentials cannot be
+    ///   serialized, the write fails, no acknowledgment arrives within the timeout, or the
+    ///   response is unrecognized.
+    func provision(_ credentials: WiFiCredentials) async throws -> ProvisioningStatus
 }
 
 /// BLE central built as an `actor` that owns the `CBCentralManager` and all mutable
@@ -34,7 +43,7 @@ actor DefaultBluetoothCentralService: BluetoothCentralService {
     
     private let centralQueue = DispatchQueue(label: "com.iotlink.bluetooth.central", qos: .userInitiated)
     private let proxy = CentralDelegateProxy()
-
+    
     // Created once in `init` and thereafter only sent messages (it manages its own
     // queue), so it is safe to hold outside the actor's isolation. This also lets the
     // synchronous `init` assign it without a cross-actor hop under the project's
@@ -51,6 +60,13 @@ actor DefaultBluetoothCentralService: BluetoothCentralService {
     /// Characteristics cached after discovery, keyed by their UUID. Consumed by later
     /// milestones for telemetry/LED/provisioning I/O.
     private var characteristics: [CBUUID: CBCharacteristic] = [:]
+    
+    /// Continuation for the in-flight `provision(_:)` call, resumed by the provisioning
+    /// characteristic's status notification or the timeout. `nil` when idle.
+    private var provisioningContinuation: CheckedContinuation<ProvisioningStatus, Error>?
+    
+    /// How long to wait for the provisioning handshake before giving up.
+    private let provisioningTimeout: Duration = .seconds(10)
     
     // Subjects are mutated only from within the actor; exposed read-only as publishers.
     nonisolated(unsafe) private let stateSubject = CurrentValueSubject<BluetoothState, Never>(.unknown)
@@ -101,8 +117,36 @@ actor DefaultBluetoothCentralService: BluetoothCentralService {
     }
     
     func disconnect() {
+        finishProvisioning(with: .failure(ProvisioningError.notReady))
         guard let peripheral = activePeripheral else { return }
         centralManager.cancelPeripheralConnection(peripheral)
+    }
+    
+    func provision(_ credentials: WiFiCredentials) async throws -> ProvisioningStatus {
+        guard let peripheral = activePeripheral,
+              let characteristic = characteristics[GATTProfile.Characteristic.provisioning] else {
+            throw ProvisioningError.notReady
+        }
+        guard provisioningContinuation == nil else {
+            throw ProvisioningError.notReady
+        }
+        guard let packet = credentials.serialize() else {
+            throw ProvisioningError.invalidCredentials
+        }
+        
+        stateSubject.send(.provisioning)
+        
+        // Suspend until the peripheral's status notification (or the timeout) resumes us.
+        // The write is issued from inside the continuation body so a synchronously-delivered
+        // ack can never race ahead of the continuation being stored.
+        let status = try await withCheckedThrowingContinuation { continuation in
+            provisioningContinuation = continuation
+            peripheral.writeValue(packet, for: characteristic, type: .withResponse)
+            startProvisioningTimeout()
+        }
+        
+        stateSubject.send(status == .success ? .provisioned : .connected)
+        return status
     }
 }
 
@@ -132,6 +176,13 @@ private extension DefaultBluetoothCentralService {
         }
         proxy.onDiscoverCharacteristics = { [weak self] service in
             Task { await self?.handleDiscoverCharacteristics(service.value) }
+        }
+        proxy.onWriteValue = { [weak self] arguments in
+            let (characteristic, error) = arguments
+            Task { await self?.handleWriteValue(characteristic.value, error: error.value) }
+        }
+        proxy.onUpdateValue = { [weak self] characteristic in
+            Task { await self?.handleUpdateValue(characteristic.value) }
         }
     }
 }
@@ -179,12 +230,60 @@ private extension DefaultBluetoothCentralService {
     
     func handleDiscoverCharacteristics(_ service: CBService) {
         service.characteristics?.forEach { characteristics[$0.uuid] = $0 }
+        
+        // Subscribe to the provisioning characteristic so the status-byte handshake
+        // notification is delivered once we write credentials.
+        if let provisioning = characteristics[GATTProfile.Characteristic.provisioning] {
+            activePeripheral?.setNotifyValue(true, for: provisioning)
+        }
+        
         stateSubject.send(.connected)
     }
     
+    func handleWriteValue(_ characteristic: CBCharacteristic, error: Error?) {
+        guard characteristic.uuid == GATTProfile.Characteristic.provisioning else { return }
+        // A write error means the ATT transaction failed; abort the pending provision.
+        if error != nil {
+            finishProvisioning(with: .failure(ProvisioningError.writeFailed))
+        }
+    }
+    
+    func handleUpdateValue(_ characteristic: CBCharacteristic) {
+        guard characteristic.uuid == GATTProfile.Characteristic.provisioning else { return }
+        
+        guard let byte = characteristic.value?.first,
+              let status = ProvisioningStatus(rawValue: byte) else {
+            finishProvisioning(with: .failure(ProvisioningError.invalidResponse))
+            return
+        }
+        finishProvisioning(with: .success(status))
+    }
+    
     func handleDisconnect() {
+        finishProvisioning(with: .failure(ProvisioningError.notReady))
         activePeripheral = nil
         characteristics.removeAll()
         stateSubject.send(.disconnected)
+    }
+}
+
+// MARK: - Provisioning Continuation
+
+private extension DefaultBluetoothCentralService {
+    
+    /// Resumes the in-flight provisioning continuation exactly once, then clears it.
+    /// Safe to call spuriously — a `nil` continuation is a no-op, which is what guards
+    /// against a double-resume when a late notification and the timeout race.
+    func finishProvisioning(with result: Result<ProvisioningStatus, Error>) {
+        guard let continuation = provisioningContinuation else { return }
+        provisioningContinuation = nil
+        continuation.resume(with: result)
+    }
+    
+    func startProvisioningTimeout() {
+        Task { [provisioningTimeout] in
+            try? await Task.sleep(for: provisioningTimeout)
+            finishProvisioning(with: .failure(ProvisioningError.timedOut))
+        }
     }
 }

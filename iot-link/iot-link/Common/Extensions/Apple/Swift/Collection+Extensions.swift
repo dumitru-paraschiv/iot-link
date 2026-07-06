@@ -8,7 +8,7 @@
 public extension Collection {
     
     @inline(__always)
-    var isNotEmpty: Bool {
+    nonisolated var isNotEmpty: Bool {
         !isEmpty
     }
 }
