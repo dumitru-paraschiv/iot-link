@@ -27,7 +27,20 @@
 		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		2A2A00E22FFB26B7002C6FE5 /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = /usr/share/man/man1/;
+			dstSubfolderSpec = 0;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 1;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		2A2A00E42FFB26B7002C6FE5 /* iot-link-simulator */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "iot-link-simulator"; sourceTree = BUILT_PRODUCTS_DIR; };
 		2A427F5C2FF5896F00C3F82E /* iot-link.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "iot-link.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		2A427F722FF5897100C3F82E /* iot-linkTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "iot-linkTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		2A427F7C2FF5897100C3F82E /* iot-linkUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "iot-linkUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -44,6 +57,11 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		2A2A00E52FFB26B7002C6FE5 /* iot-link-simulator */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "iot-link-simulator";
+			sourceTree = "<group>";
+		};
 		2A427F5E2FF5896F00C3F82E /* iot-link */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
@@ -65,6 +83,13 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		2A2A00E12FFB26B7002C6FE5 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		2A427F592FF5896F00C3F82E /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -96,6 +121,7 @@
 				2A427F5E2FF5896F00C3F82E /* iot-link */,
 				2A427F752FF5897100C3F82E /* iot-linkTests */,
 				2A427F7F2FF5897100C3F82E /* iot-linkUITests */,
+				2A2A00E52FFB26B7002C6FE5 /* iot-link-simulator */,
 				2A427F5D2FF5896F00C3F82E /* Products */,
 			);
 			sourceTree = "<group>";
@@ -106,6 +132,7 @@
 				2A427F5C2FF5896F00C3F82E /* iot-link.app */,
 				2A427F722FF5897100C3F82E /* iot-linkTests.xctest */,
 				2A427F7C2FF5897100C3F82E /* iot-linkUITests.xctest */,
+				2A2A00E42FFB26B7002C6FE5 /* iot-link-simulator */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -113,6 +140,28 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		2A2A00E32FFB26B7002C6FE5 /* iot-link-simulator */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2A2A00E82FFB26B7002C6FE5 /* Build configuration list for PBXNativeTarget "iot-link-simulator" */;
+			buildPhases = (
+				2A2A00E02FFB26B7002C6FE5 /* Sources */,
+				2A2A00E12FFB26B7002C6FE5 /* Frameworks */,
+				2A2A00E22FFB26B7002C6FE5 /* CopyFiles */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				2A2A00E52FFB26B7002C6FE5 /* iot-link-simulator */,
+			);
+			name = "iot-link-simulator";
+			packageProductDependencies = (
+			);
+			productName = "iot-link-simulator";
+			productReference = 2A2A00E42FFB26B7002C6FE5 /* iot-link-simulator */;
+			productType = "com.apple.product-type.tool";
+		};
 		2A427F5B2FF5896F00C3F82E /* iot-link */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 2A427F852FF5897100C3F82E /* Build configuration list for PBXNativeTarget "iot-link" */;
@@ -189,9 +238,12 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 2650;
+				LastSwiftUpdateCheck = 2660;
 				LastUpgradeCheck = 2650;
 				TargetAttributes = {
+					2A2A00E32FFB26B7002C6FE5 = {
+						CreatedOnToolsVersion = 26.6;
+					};
 					2A427F5B2FF5896F00C3F82E = {
 						CreatedOnToolsVersion = 26.5;
 					};
@@ -225,6 +277,7 @@
 				2A427F5B2FF5896F00C3F82E /* iot-link */,
 				2A427F712FF5897100C3F82E /* iot-linkTests */,
 				2A427F7B2FF5897100C3F82E /* iot-linkUITests */,
+				2A2A00E32FFB26B7002C6FE5 /* iot-link-simulator */,
 			);
 		};
 /* End PBXProject section */
@@ -254,6 +307,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		2A2A00E02FFB26B7002C6FE5 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		2A427F582FF5896F00C3F82E /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -291,6 +351,44 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		2A2A00E92FFB26B7002C6FE5 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CREATE_INFOPLIST_SECTION_IN_BINARY = YES;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Advertises a simulated smart device over Bluetooth.";
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.iot-link-simulator";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		2A2A00EA2FFB26B7002C6FE5 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CREATE_INFOPLIST_SECTION_IN_BINARY = YES;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Advertises a simulated smart device over Bluetooth.";
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.iot-link-simulator";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
 		2A427F862FF5897100C3F82E /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -589,6 +687,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		2A2A00E82FFB26B7002C6FE5 /* Build configuration list for PBXNativeTarget "iot-link-simulator" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2A2A00E92FFB26B7002C6FE5 /* Debug */,
+				2A2A00EA2FFB26B7002C6FE5 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		2A427F572FF5896F00C3F82E /* Build configuration list for PBXProject "iot-link" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

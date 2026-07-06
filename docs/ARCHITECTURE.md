@@ -2,7 +2,7 @@
 
 This document details the architectural guidelines, concurrency models, dependency injection layout, and resilience mechanisms implemented in the **IoT-Link** ecosystem.
 
-> **Note:** This document describes the target architecture. The onboarding module and `BluetoothCentralService` (scan → connect → discover) are implemented; components such as `ProvisioningFlow` and the telemetry dashboard are designed but not yet built.
+> **Note:** This document describes the target architecture. The onboarding module, the `BluetoothCentralService` central (scan → connect → discover), and the macOS peripheral simulator (`iot-link-simulator`) are implemented; components such as `ProvisioningFlow` and the telemetry dashboard are designed but not yet built.
 
 ---
 
