@@ -8,7 +8,7 @@
 public extension Bool {
     
     @inline(__always)
-    var isFalse: Bool {
+    nonisolated var isFalse: Bool {
         !self
     }
 }

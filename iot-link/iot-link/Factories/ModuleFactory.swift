@@ -11,6 +11,7 @@ protocol ModuleFactory {
     
     func makeOnboardingView(with model: OnboardingModel) -> OnboardingView
     func makeHomeView(with model: HomeModel) -> HomeView
+    func makeScanView(with model: ScanModel) -> ScanView
     func makeSettingsView(with model: SettingsModel) -> SettingsView
 }
 
@@ -21,6 +22,10 @@ extension ModuleFactory where Self: AnyFactory {
     }
     
     func makeHomeView(with model: HomeModel) -> HomeView {
+        r.resolve(with: model)
+    }
+    
+    func makeScanView(with model: ScanModel) -> ScanView {
         r.resolve(with: model)
     }
     

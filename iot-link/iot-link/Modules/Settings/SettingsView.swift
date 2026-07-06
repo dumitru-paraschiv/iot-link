@@ -9,6 +9,7 @@ import Combine
 
 enum SettingsViewSteps {
     
+    case addDeviceTapped
 }
 
 protocol SettingsViewOutput: AnyObject {
@@ -19,6 +20,7 @@ protocol SettingsViewOutput: AnyObject {
 enum SettingsViewAction {
     
     case viewDidLoad
+    case addDeviceTapped
 }
 
 protocol SettingsViewInput {

@@ -12,6 +12,7 @@ protocol FlowFactory {
     func makeOnboardingFlow(navigationController: UINavigationController) -> OnboardingFlow
     func makeMainFlow(tabBarController: UITabBarController) -> MainFlow
     func makeHomeFlow(navigationController: UINavigationController) -> HomeFlow
+    func makeProvisioningFlow(navigationController: UINavigationController) -> ProvisioningFlow
     func makeSettingsFlow(navigationController: UINavigationController) -> SettingsFlow
 }
 
@@ -26,6 +27,10 @@ extension FlowFactory where Self: AnyFactory {
     }
     
     func makeHomeFlow(navigationController: UINavigationController) -> HomeFlow {
+        r.resolve(with: navigationController)
+    }
+    
+    func makeProvisioningFlow(navigationController: UINavigationController) -> ProvisioningFlow {
         r.resolve(with: navigationController)
     }
     

@@ -44,6 +44,24 @@ final class ModuleAssembly: Assembly {
             return view
         }
         
+        container.register(ScanView.self) { r, model in
+            let viewModel = ScanViewModel(
+                bluetoothService: MainResolver(r).resolve(),
+                model: model
+            )
+            let viewUI = ScanViewUI(viewModel: viewModel)
+            let view = ScanViewController(rootView: viewUI)
+            
+            #if DEBUG
+            trackDeallocation(for: viewModel)
+            trackDeallocation(for: view)
+            #endif
+            
+            viewModel.bind(output: view)
+            view.viewModel = viewModel
+            return view
+        }
+        
         container.register(SettingsView.self) { r, model in
             let viewModel = SettingsViewModel(model: model)
             let viewUI = SettingsViewUI(viewModel: viewModel)
