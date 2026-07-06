@@ -40,15 +40,18 @@ This plan outlines the code generation stages for **IoT-Link**, utilizing a Git 
   * Added `NSBluetoothAlwaysUsageDescription` to `Info.plist` (required before the permission prompt).
   * Marked shared value utilities (`Optional`, `Sequence` extensions) `nonisolated` so the actor compiles warning-free under the project's `-default-isolation=MainActor` setting.
 
-### 🏁 Milestone 3: IoT-Device macOS Simulator Target
+### ✅ Milestone 3: IoT-Device macOS Simulator Target
 * **Branch**: `feature/device-simulator`
 * **Commit Message**: `feat(simulator): add macOS command-line utility peripheral target`
 * **Rationale**: The simulator must exist before provisioning and telemetry can be tested end-to-end. Building it early prevents developing BLE features blind.
+* **Design**: Self-contained target — no code shared with the iOS app (mirrors real firmware; the wire contract in `GATT_SPEC.md` is the only coupling). Reuses the M2 concurrency pattern: an `actor SimulatorPeripheral` owning the `CBPeripheralManager`, fed by a `nonisolated PeripheralDelegateProxy`.
 * **Changes**:
-  * Add a new Target `iot-link-simulator` (macOS Command Line Tool) to the Xcode workspace.
-  * Implement `CBPeripheralManager` to advertise `SmartDeviceService`.
-  * Write logic to handle and log incoming provisioning credential packets.
-  * Implement mocked periodic telemetry streams and support read/write LED requests.
+  * Added the `iot-link-simulator` (macOS Command Line Tool) target with its own `GATTProfile` and `UncheckedSendable`.
+  * `SimulatorPeripheral` (actor) advertises `SmartDeviceService` with three characteristics and handles reads/writes/subscriptions.
+  * `Serialization` decodes the provisioning packet (bounds-checked → `0x01` on malformed input, `0x00` after a ~0.5 s delay on success) and encodes big-endian fixed-point telemetry.
+  * `TelemetryTicker` emits a bounded random-walk reading every ~1 s, only while a central is subscribed.
+  * Interactive CLI (`KeyboardCommands`, raw-mode stdin): `l` toggle LED, `t` pause/resume telemetry, `d` drop connection, `q` quit; unmapped keys log a hint.
+  * Configured the CLI target to embed an Info.plist (`GENERATE_INFOPLIST_FILE` + `CREATE_INFOPLIST_SECTION_IN_BINARY`) carrying `NSBluetoothAlwaysUsageDescription`, so the macOS Bluetooth permission prompt appears reliably on a reviewer's machine.
 
 ### 🏁 Milestone 4: BLE Device Provisioning Flow
 * **Branch**: `feature/ble-provisioning`

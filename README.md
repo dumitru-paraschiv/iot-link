@@ -64,7 +64,7 @@ iot-link/
     │   ├── Services/              # Core Services (Account, App, BluetoothCentralService)
     │   ├── Factories/             # Factory pattern implementations for Modules and Flows
     │   └── Common/                # Types, Extensions, and Swift Helpers
-    ├── iot-link-simulator/        # macOS Simulator CLI Target (planned)
+    ├── iot-link-simulator/        # macOS Simulator CLI Target (CBPeripheralManager)
     ├── iot-linkTests/             # Unit test target
     └── iot-linkUITests/           # UI test target
 ```
@@ -78,7 +78,18 @@ Since the simulator is a macOS command-line utility, you can run it directly on 
 1. Open the project in Xcode: `open iot-link/iot-link.xcodeproj`
 2. Select the `iot-link-simulator` target from the Xcode schema selector.
 3. Choose **My Mac** as the run destination.
-4. Press `Cmd + R` to run. The Xcode debug console will start printing advertising logs.
+4. Press `Cmd + R` to run. The Xcode debug console will start printing advertising logs (look for `📡 advertising SmartDeviceService…`).
+
+> **Bluetooth permission (first run):** macOS shows a one-time Bluetooth consent prompt the first time the simulator advertises — click **Allow**. If you accidentally deny it, re-enable it under **System Settings → Privacy & Security → Bluetooth**, since the choice is remembered per-app.
+
+**Interactive keyboard commands** (while the simulator is running in the Xcode console):
+| Key | Action |
+| :-- | :--- |
+| `l` | Toggle the status LED locally |
+| `t` | Pause / resume the telemetry stream |
+| `d` | Drop the current connection (restarts advertising) |
+| `q` | Quit and restore the terminal |
+| `?` | Print the command help |
 
 ### 2. Build and Run the iOS Central App
 To test BLE interaction:
