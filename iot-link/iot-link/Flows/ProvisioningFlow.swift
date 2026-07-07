@@ -38,27 +38,66 @@ final class DefaultProvisioningFlow: NavigationFlow, ProvisioningFlow, ModuleFac
 
 private extension DefaultProvisioningFlow {
     
+    func showCredentialsView(with model: CredentialsModel) {
+        let view = makeCredentialsView(with: model)
+        view.steps.sink { [weak self] in
+            switch $0 {
+            case let .provisioned(status):
+                let outcome = ResultModel.builder.makeOutcome(from: status)
+                self?.showResultView(with: ResultModel(outcome: outcome))
+            case .failed:
+                let outcome = ResultModel.builder.makeUnreachableFailureOutcome()
+                self?.showResultView(with: ResultModel(outcome: outcome))
+            }
+        }
+        .store(in: &view.stepsBag)
+        push(view)
+    }
+    
+    func showResultView(with model: ResultModel) {
+        let view = makeResultView(with: model)
+        view.steps.sink { [weak self] in
+            switch $0 {
+            case .done: self?.finish(provisioned: true)
+            case let .retry(recovery): self?.retry(recovery)
+            case .cancel: self?.cancel()
+            }
+        }
+        .store(in: &view.stepsBag)
+        push(view)
+    }
+    
     func showScanView(with model: ScanModel) {
         let view = makeScanView(with: model)
         view.steps.sink { [weak self] in
             switch $0 {
-            case .connected: self?.showCredentials()
+            case .connected: self?.showCredentialsView(with: CredentialsModel())
             case .cancelled: self?.cancel()
             }
         }
         .store(in: &view.stepsBag)
         setRoot(view)
     }
+}
+
+private extension DefaultProvisioningFlow {
     
-    /// Placeholder until the credential form arrives in the next commit. For now,
-    /// reaching the connected state is the end of this commit's flow.
-    func showCredentials() {
-        // C3: push the Wi-Fi credentials module here.
-    }
-    
-    /// User abandoned provisioning — tear down the BLE connection and finish.
+    /// User abandoned provisioning - tear down the BLE connection and finish.
     func cancel() {
         Task { await bluetoothService.disconnect() }
-        steps.send(.finished(provisioned: false))
+        finish(provisioned: false)
+    }
+    
+    func finish(provisioned: Bool) {
+        steps.send(.finished(provisioned: provisioned))
+    }
+    
+    /// Resumes after a failure at the point that is actually recoverable: the credentials
+    /// form if the device is still connected, or the scan list if it must be found again.
+    func retry(_ recovery: ResultModel.Recovery) {
+        switch recovery {
+        case .reenterCredentials: pop()
+        case .rescan: popToRoot()
+        }
     }
 }

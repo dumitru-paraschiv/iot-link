@@ -18,6 +18,11 @@ final class ScanViewController: BaseHostingController<ScanViewUI>, ScanView {
         viewModel.send(.viewDidLoad)
     }
     
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        viewModel.send(.viewWillAppear)
+    }
+    
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         viewModel.send(.viewWillDisappear)

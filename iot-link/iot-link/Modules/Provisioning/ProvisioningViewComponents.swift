@@ -9,6 +9,83 @@ import SwiftUI
 
 enum ProvisioningViewComponents {
     
+    // MARK: CharacterCounter
+    
+    struct CharacterCounter: View {
+        
+        let byteCount: Int
+        let maxBytes: Int
+        let isOverLimit: Bool
+        
+        var body: some View {
+            Text("\(byteCount)/\(maxBytes)")
+                .font(.caption2)
+                .fontDesign(.rounded)
+                .foregroundStyle(isOverLimit ? Color.red : Color.secondary)
+                .animation(.smooth, value: isOverLimit)
+                .frame(minWidth: .zero, maxWidth: .infinity, alignment: .trailing)
+        }
+    }
+    
+    // MARK: CredentialField
+    
+    struct CredentialField: View {
+        
+        let title: String
+        let placeholder: String
+        @Binding var text: String
+        let byteCount: Int
+        let maxBytes: Int
+        let isOverLimit: Bool
+        
+        var body: some View {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(title)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .fontDesign(.rounded)
+                    .foregroundStyle(.secondary)
+                
+                TextField(placeholder, text: $text)
+                    .textContentType(.none)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .textFieldStyle(.plain)
+                    .font(.title3)
+                    .frame(height: 32)
+                    .padding(8)
+                    .background(Color(.secondarySystemBackground))
+                    .clipShape(.rect(cornerRadius: 8))
+                
+                CharacterCounter(byteCount: byteCount, maxBytes: maxBytes, isOverLimit: isOverLimit)
+            }
+        }
+    }
+    
+    // MARK: CredentialsHeader
+    
+    struct CredentialsHeader: View {
+        
+        var body: some View {
+            VStack(spacing: 12) {
+                Image(systemName: "wifi")
+                    .font(.system(size: 48))
+                    .foregroundStyle(Color.accentColor)
+                
+                Text("Connect to Wi-Fi")
+                    .font(.title2)
+                    .fontWeight(.bold)
+                    .fontDesign(.rounded)
+                
+                Text("Enter your network details to configure the device.")
+                    .font(.subheadline)
+                    .fontDesign(.rounded)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+        }
+    }
+    
     // MARK: DeviceRow
     
     struct DeviceRow: View {
@@ -33,6 +110,117 @@ enum ProvisioningViewComponents {
             }
             .contentShape(.rect)
             .padding(.vertical, 4)
+        }
+    }
+    
+    // MARK: FailureResult
+    
+    struct FailureResult: View {
+        
+        let reason: String
+        let onRetry: EmptyCallback?
+        let onCancel: EmptyCallback?
+        
+        var body: some View {
+            VStack(spacing: 24) {
+                Spacer()
+                
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 72))
+                    .foregroundStyle(.red)
+                
+                VStack(spacing: 8) {
+                    Text("Provisioning Failed")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                        .fontDesign(.rounded)
+                    
+                    Text(reason)
+                        .font(.body)
+                        .fontDesign(.rounded)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                
+                Spacer()
+                
+                VStack(spacing: 32) {
+                    Button {
+                        onRetry?()
+                    } label: {
+                        Text("Try Again")
+                            .font(.headline)
+                            .fontDesign(.rounded)
+                            .foregroundStyle(.white)
+                            .frame(minWidth: .zero, maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .background(Color.accentColor)
+                            .clipShape(.capsule)
+                    }
+                    
+                    Button {
+                        onCancel?()
+                    } label: {
+                        Text("Cancel")
+                            .font(.headline)
+                            .fontDesign(.rounded)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .padding(.horizontal, 40)
+            .padding(.bottom, 54)
+        }
+    }
+    
+    // MARK: PasswordField
+    
+    struct PasswordField: View {
+        
+        @Binding var text: String
+        let isRevealed: Bool
+        let byteCount: Int
+        let maxBytes: Int
+        let isOverLimit: Bool
+        let onToggleReveal: EmptyCallback?
+        
+        var body: some View {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Password")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .fontDesign(.rounded)
+                    .foregroundStyle(.secondary)
+                
+                HStack(spacing: 8) {
+                    Group {
+                        if isRevealed {
+                            TextField("Password", text: $text)
+                        } else {
+                            SecureField("Password", text: $text)
+                        }
+                    }
+                    .textContentType(.none)
+                    .textFieldStyle(.plain)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .font(.title3)
+                    .frame(height: 32)
+                    
+                    Button {
+                        onToggleReveal?()
+                    } label: {
+                        Image(systemName: isRevealed ? "eye.slash" : "eye")
+                            .foregroundStyle(.secondary)
+                            .contentTransition(.symbolEffect(.replace))
+                    }
+                }
+                .padding(8)
+                .background(Color(.secondarySystemBackground))
+                .clipShape(.rect(cornerRadius: 8))
+                
+                CharacterCounter(byteCount: byteCount, maxBytes: maxBytes, isOverLimit: isOverLimit)
+            }
         }
     }
     
@@ -82,6 +270,58 @@ enum ProvisioningViewComponents {
             case .medium: 0.66
             case .weak: 0.33
             }
+        }
+    }
+    
+    // MARK: SubmitButton
+    
+    struct SubmitButton: View {
+        
+        let isSubmitting: Bool
+        let isEnabled: Bool
+        let action: EmptyCallback?
+        
+        var body: some View {
+            Button {
+                action?()
+            } label: {
+                Group {
+                    if isSubmitting {
+                        ProgressView()
+                            .tint(.white)
+                    } else {
+                        Text("Connect")
+                            .font(.headline)
+                            .fontDesign(.rounded)
+                            .foregroundStyle(.white)
+                    }
+                }
+                .frame(minWidth: .zero, maxWidth: .infinity)
+                .padding(.vertical, 16)
+                .background(isEnabled ? Color.accentColor : Color.gray)
+                .clipShape(.capsule)
+                .animation(.smooth, value: isEnabled)
+            }
+            .disabled(isEnabled.isFalse)
+        }
+    }
+    
+    // MARK: SuccessResult
+    
+    struct SuccessResult: View {
+        
+        var body: some View {
+            VStack(spacing: 20) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 72))
+                    .foregroundStyle(.green)
+                
+                Text("Device Added")
+                    .font(.title2)
+                    .fontWeight(.bold)
+                    .fontDesign(.rounded)
+            }
+            .frame(minWidth: .zero, maxWidth: .infinity, minHeight: .zero, maxHeight: .infinity)
         }
     }
 }

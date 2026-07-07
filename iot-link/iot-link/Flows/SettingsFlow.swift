@@ -34,7 +34,7 @@ private extension DefaultSettingsFlow {
         let provisioningFlow = makeProvisioningFlow(navigationController: provisioningNavigationController)
         provisioningFlow.steps.sink { [weak self, weak provisioningFlow] in
             switch $0 {
-            case .finished: provisioningFlow.flatMap { self?.dismiss($0) }
+            case let .finished(provisioned): provisioningFlow.flatMap { self?.dismiss($0) }
             }
         }
         .store(in: &provisioningFlow.stepsBag)

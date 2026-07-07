@@ -28,6 +28,7 @@ final class ScanViewModel {
     func send(_ action: ScanViewAction) {
         switch action {
         case .viewDidLoad: handleViewDidLoad()
+        case .viewWillAppear: handleViewWillAppear()
         case .viewWillDisappear: handleViewWillDisappear()
         case let .deviceTapped(id): handleDeviceTapped(id: id)
         }
@@ -61,7 +62,17 @@ private extension ScanViewModel {
     func handleViewDidLoad() {
         observePeripherals()
         observeState()
-        Task { await bluetoothService.startScanning() }
+    }
+    
+    func handleViewWillAppear() {
+        // Start on appear (not load) so scanning resumes when the user pops back from the
+        // credentials form to pick a different device. If a connection lingers from a
+        // previous selection, drop it first - a connected peripheral stops advertising and
+        // would otherwise never reappear in the rescan.
+        Task {
+            await bluetoothService.disconnect()
+            await bluetoothService.startScanning()
+        }
     }
     
     func handleViewWillDisappear() {
@@ -78,7 +89,14 @@ private extension ScanViewModel {
     func handleStateChange(_ state: BluetoothState) {
         switch state {
         case .connected:
-            output?.steps.send(.connected)
+            // Only navigate for a connection this screen initiated. A replayed `.connected`
+            // from the current-value publisher (e.g. re-entering scan while a stale link
+            // lingers) must not auto-advance to the form.
+            let didInitiate = model.isConnecting
+            model.accept(connectingDeviceID: nil)
+            if didInitiate {
+                output?.steps.send(.connected)
+            }
         case .disconnected, .idle:
             // A drop during connection returns us to the scanning list.
             if model.isConnecting {

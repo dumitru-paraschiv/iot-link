@@ -9,19 +9,29 @@ import Foundation
 
 protocol ModuleFactory {
     
-    func makeOnboardingView(with model: OnboardingModel) -> OnboardingView
+    func makeCredentialsView(with model: CredentialsModel) -> CredentialsView
     func makeHomeView(with model: HomeModel) -> HomeView
+    func makeOnboardingView(with model: OnboardingModel) -> OnboardingView
+    func makeResultView(with model: ResultModel) -> ResultView
     func makeScanView(with model: ScanModel) -> ScanView
     func makeSettingsView(with model: SettingsModel) -> SettingsView
 }
 
 extension ModuleFactory where Self: AnyFactory {
     
-    func makeOnboardingView(with model: OnboardingModel) -> OnboardingView {
+    func makeCredentialsView(with model: CredentialsModel) -> CredentialsView {
         r.resolve(with: model)
     }
     
     func makeHomeView(with model: HomeModel) -> HomeView {
+        r.resolve(with: model)
+    }
+    
+    func makeOnboardingView(with model: OnboardingModel) -> OnboardingView {
+        r.resolve(with: model)
+    }
+    
+    func makeResultView(with model: ResultModel) -> ResultView {
         r.resolve(with: model)
     }
     

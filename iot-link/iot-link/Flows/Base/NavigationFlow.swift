@@ -26,12 +26,10 @@ class NavigationFlow: BaseFlow<UINavigationController> {
         setupNavigationDelegate(controller: controller)
     }
     
-    func setRoot(_ presentable: Presentable,
-                 showTopBar: Bool = true) {
+    func setRoot(_ presentable: Presentable) {
         controller.viewControllers.forEach {
             runPopCompletion($0)
         }
-        controller.setNavigationBarHidden(showTopBar.isFalse, animated: false)
         controller.setViewControllers([presentable.toPresent()], animated: false)
     }
     

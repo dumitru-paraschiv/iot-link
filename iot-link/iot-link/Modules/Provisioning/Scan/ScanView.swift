@@ -21,9 +21,10 @@ protocol ScanViewOutput: AnyObject {
 
 enum ScanViewAction {
     
-    case deviceTapped(id: UUID)
     case viewDidLoad
+    case viewWillAppear
     case viewWillDisappear
+    case deviceTapped(id: UUID)
 }
 
 protocol ScanViewInput {
