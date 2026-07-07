@@ -85,7 +85,7 @@ Since the simulator is a macOS command-line utility, you can run it directly on 
 **Interactive keyboard commands** (while the simulator is running in the Xcode console):
 | Key | Action |
 | :-- | :--- |
-| `l` | Toggle the status LED locally |
+| `l` | Toggle the status LED locally (pushed to the app via notification) |
 | `t` | Pause / resume the telemetry stream |
 | `d` | Drop the current connection (restarts advertising) |
 | `q` | Quit and restore the terminal |

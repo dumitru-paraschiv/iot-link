@@ -13,7 +13,7 @@ This document defines the custom BLE GATT (Generic Attribute Profile) specificat
 | :--- | :--- | :--- | :--- | :--- |
 | **Provisioning Endpoint** | `E0C00002-C3B6-4B22-9F1C-123456789ABC` | Write (With Response), Notify | Variable (Max 128 Bytes) | Uploads local Wi-Fi credentials to the device. Notifies provisioning status. |
 | **Sensor Telemetry** | `E0C00003-C3B6-4B22-9F1C-123456789ABC` | Notify (Indicate) | 4 Bytes (Fixed) | Streams real-time Temperature & Humidity data. |
-| **Hardware Control** | `E0C00004-C3B6-4B22-9F1C-123456789ABC` | Read, WriteWithoutResponse | 1 Byte | Controls and monitors the simulated status LED. |
+| **Hardware Control** | `E0C00004-C3B6-4B22-9F1C-123456789ABC` | Read, WriteWithoutResponse, Notify | 1 Byte | Controls and monitors the simulated status LED. Notifies on any state change. |
 
 ---
 
@@ -65,13 +65,18 @@ $$\text{Humidity (\%)} = \frac{\text{Int16Value}}{100.0}$$
 
 ---
 
-### 3. Hardware Control (Read & Write Without Response)
-Allows the app to read and toggle the status LED.
+### 3. Hardware Control (Read, Write Without Response & Notify)
+Allows the app to read and toggle the status LED, and receive push updates when it changes.
 
 #### Payload Structure:
 * **Byte 0**: LED State (Unsigned 8-bit integer)
   * `0x00`: LED OFF
   * `0x01`: LED ON
+
+#### Change Notifications:
+The Peripheral notifies subscribed centrals with the current 1-byte state whenever the LED
+changes — whether from a central's write or a local change on the device (e.g. a physical
+button). This lets the app's control reflect the device's true state without polling.
 
 ---
 

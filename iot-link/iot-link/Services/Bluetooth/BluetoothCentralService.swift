@@ -17,6 +17,15 @@ protocol BluetoothCentralService: Sendable {
     /// Peripherals discovered during the current scan, replayed to new subscribers.
     var discoveredPeripheralsPublisher: AnyPublisher<[DiscoveredPeripheral], Never> { get }
     
+    /// The connected peripheral's identity, or `nil` when not connected.
+    var connectedDevicePublisher: AnyPublisher<ConnectedDevice?, Never> { get }
+    
+    /// Latest telemetry reading, or `nil` when none has arrived / not connected.
+    var telemetryPublisher: AnyPublisher<TelemetryReading?, Never> { get }
+    
+    /// Latest known LED state, or `nil` when not connected.
+    var ledStatePublisher: AnyPublisher<LEDState?, Never> { get }
+    
     func startScanning() async
     func stopScanning() async
     func connect(to id: UUID) async
@@ -30,6 +39,10 @@ protocol BluetoothCentralService: Sendable {
     ///   serialized, the write fails, no acknowledgment arrives within the timeout, or the
     ///   response is unrecognized.
     func provision(_ credentials: WiFiCredentials) async throws -> ProvisioningStatus
+    
+    /// Sets the device's status LED (write-without-response), then reads the control
+    /// characteristic back so `ledStatePublisher` reconciles to the device's true state.
+    func setLED(_ on: Bool) async
 }
 
 /// BLE central built as an `actor` that owns the `CBCentralManager` and all mutable
@@ -88,6 +101,9 @@ actor DefaultBluetoothCentralService: BluetoothCentralService {
     // Subjects are mutated only from within the actor; exposed read-only as publishers.
     nonisolated(unsafe) private let stateSubject = CurrentValueSubject<BluetoothState, Never>(.unknown)
     nonisolated(unsafe) private let peripheralsSubject = CurrentValueSubject<[DiscoveredPeripheral], Never>([])
+    nonisolated(unsafe) private let connectedDeviceSubject = CurrentValueSubject<ConnectedDevice?, Never>(nil)
+    nonisolated(unsafe) private let telemetrySubject = CurrentValueSubject<TelemetryReading?, Never>(nil)
+    nonisolated(unsafe) private let ledStateSubject = CurrentValueSubject<LEDState?, Never>(nil)
     
     nonisolated var statePublisher: AnyPublisher<BluetoothState, Never> {
         stateSubject.eraseToAnyPublisher()
@@ -95,6 +111,18 @@ actor DefaultBluetoothCentralService: BluetoothCentralService {
     
     nonisolated var discoveredPeripheralsPublisher: AnyPublisher<[DiscoveredPeripheral], Never> {
         peripheralsSubject.eraseToAnyPublisher()
+    }
+    
+    nonisolated var connectedDevicePublisher: AnyPublisher<ConnectedDevice?, Never> {
+        connectedDeviceSubject.eraseToAnyPublisher()
+    }
+    
+    nonisolated var telemetryPublisher: AnyPublisher<TelemetryReading?, Never> {
+        telemetrySubject.eraseToAnyPublisher()
+    }
+    
+    nonisolated var ledStatePublisher: AnyPublisher<LEDState?, Never> {
+        ledStateSubject.eraseToAnyPublisher()
     }
     
     init() {
@@ -171,6 +199,17 @@ actor DefaultBluetoothCentralService: BluetoothCentralService {
         
         stateSubject.send(status == .success ? .provisioned : .connected)
         return status
+    }
+    
+    func setLED(_ on: Bool) {
+        guard let peripheral = activePeripheral,
+              let characteristic = characteristics[GATTProfile.Characteristic.control] else {
+            return
+        }
+        let state: LEDState = on ? .on : .off
+        // Write-without-response; the peripheral notifies the resulting state on the control
+        // characteristic, which reconciles `ledStatePublisher` (see `handleUpdateValue`).
+        peripheral.writeValue(state.serialize(), for: characteristic, type: .withoutResponse)
     }
 }
 
@@ -308,6 +347,21 @@ private extension DefaultBluetoothCentralService {
             activePeripheral?.setNotifyValue(true, for: provisioning)
         }
         
+        // Subscribe to telemetry so readings stream as soon as connected. Subscribe to the
+        // control characteristic (Notify) so LED changes are pushed — whether from our own
+        // write or a local change on the device — and read it once for the initial state.
+        if let telemetry = characteristics[GATTProfile.Characteristic.telemetry] {
+            activePeripheral?.setNotifyValue(true, for: telemetry)
+        }
+        if let control = characteristics[GATTProfile.Characteristic.control] {
+            activePeripheral?.setNotifyValue(true, for: control)
+            activePeripheral?.readValue(for: control)
+        }
+        
+        if let peripheral = activePeripheral {
+            connectedDeviceSubject.send(ConnectedDevice(id: peripheral.identifier, name: peripheral.name))
+        }
+        
         stateSubject.send(.connected)
     }
     
@@ -320,8 +374,19 @@ private extension DefaultBluetoothCentralService {
     }
     
     func handleUpdateValue(_ characteristic: CBCharacteristic) {
-        guard characteristic.uuid == GATTProfile.Characteristic.provisioning else { return }
-        
+        switch characteristic.uuid {
+        case GATTProfile.Characteristic.provisioning:
+            handleProvisioningUpdate(characteristic)
+        case GATTProfile.Characteristic.telemetry:
+            telemetrySubject.send(characteristic.value.flatMap(TelemetryReading.parse))
+        case GATTProfile.Characteristic.control:
+            ledStateSubject.send(characteristic.value.map(LEDState.parse))
+        default:
+            break
+        }
+    }
+    
+    func handleProvisioningUpdate(_ characteristic: CBCharacteristic) {
         guard let byte = characteristic.value?.first,
               let status = ProvisioningStatus(rawValue: byte) else {
             finishProvisioning(with: .failure(ProvisioningError.invalidResponse))
@@ -334,6 +399,9 @@ private extension DefaultBluetoothCentralService {
         finishProvisioning(with: .failure(ProvisioningError.notReady))
         activePeripheral = nil
         characteristics.removeAll()
+        connectedDeviceSubject.send(nil)
+        telemetrySubject.send(nil)
+        ledStateSubject.send(nil)
         stateSubject.send(.disconnected)
     }
 }
