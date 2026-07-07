@@ -32,20 +32,24 @@ private extension DefaultHomeFlow {
         let homeView = makeHomeView(with: model)
         homeView.steps.sink { [weak self] in
             switch $0 {
-            case .addDeviceTapped: self?.showProvisioningFlow()
+            case .addDeviceTapped: self?.showProvisioningFlow(startMode: .scan)
+            case .setUpWiFiTapped: self?.showProvisioningFlow(startMode: .credentials)
             }
         }
         .store(in: &homeView.stepsBag)
         setRoot(homeView)
     }
     
-    func showProvisioningFlow() {
+    func showProvisioningFlow(startMode: ProvisioningStartMode) {
         let provisioningNavigationController = UINavigationController()
         provisioningNavigationController.title = "ProvisioningNavigationController"
-        let provisioningFlow = makeProvisioningFlow(navigationController: provisioningNavigationController)
+        let provisioningFlow = makeProvisioningFlow(
+            navigationController: provisioningNavigationController,
+            startMode: startMode
+        )
         provisioningFlow.steps.sink { [weak self, weak provisioningFlow] in
             switch $0 {
-            case let .finished(provisioned): provisioningFlow.flatMap { self?.dismiss($0) }
+            case .finished: provisioningFlow.flatMap { self?.dismiss($0) }
             }
         }
         .store(in: &provisioningFlow.stepsBag)

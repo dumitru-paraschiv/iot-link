@@ -10,6 +10,7 @@ import Combine
 enum HomeViewSteps {
     
     case addDeviceTapped
+    case setUpWiFiTapped
 }
 
 protocol HomeViewOutput: AnyObject {
@@ -21,6 +22,9 @@ enum HomeViewAction {
     
     case viewDidLoad
     case addDeviceTapped
+    case setUpWiFiTapped
+    case ledToggled(Bool)
+    case disconnectTapped
 }
 
 protocol HomeViewInput {

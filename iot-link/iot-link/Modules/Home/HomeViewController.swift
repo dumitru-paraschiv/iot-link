@@ -29,6 +29,22 @@ struct HomeViewUI: View {
     var viewModel: HomeViewModel
     
     var body: some View {
+        switch viewModel.model.phase {
+        case .empty:
+            emptyState
+        case .dashboard:
+            dashboard(isConnected: true)
+        case .connectionLost:
+            dashboard(isConnected: false)
+        }
+    }
+}
+
+// MARK: - Empty State
+
+private extension HomeViewUI {
+    
+    var emptyState: some View {
         VStack(spacing: 24) {
             Spacer()
             
@@ -66,5 +82,66 @@ struct HomeViewUI: View {
         }
         .padding(.horizontal, 40)
         .padding(.bottom, 64)
+    }
+}
+
+// MARK: - Dashboard
+
+private extension HomeViewUI {
+    
+    func dashboard(isConnected: Bool) -> some View {
+        VStack(spacing: 24) {
+            HomeViewComponents.DeviceHeader(
+                name: viewModel.model.device?.name ?? "Smart Device",
+                isConnected: isConnected
+            )
+            
+            if isConnected.isFalse {
+                HomeViewComponents.ConnectionLostBanner()
+            }
+            
+            HStack(spacing: 16) {
+                HomeViewComponents.TelemetryGauge(
+                    title: "Temperature",
+                    systemImage: "thermometer.medium",
+                    value: viewModel.model.telemetry?.temperature ?? 0,
+                    range: -20 ... 40,
+                    unit: "°C",
+                    tint: .orange
+                )
+                
+                HomeViewComponents.TelemetryGauge(
+                    title: "Humidity",
+                    systemImage: "humidity",
+                    value: viewModel.model.telemetry?.humidity ?? 0,
+                    range: 0 ... 100,
+                    unit: "%",
+                    tint: .blue
+                )
+            }
+            
+            HomeViewComponents.LEDControl(
+                isOn: viewModel.model.isLEDOn,
+                onToggle: { viewModel.send(.ledToggled($0)) }
+            )
+            .disabled(isConnected.isFalse)
+            
+            Spacer()
+            
+            if isConnected {
+                HomeViewComponents.SetUpWiFiButton(
+                    action: { viewModel.send(.setUpWiFiTapped) }
+                )
+            }
+            
+            HomeViewComponents.DisconnectButton(
+                action: { viewModel.send(.disconnectTapped) }
+            )
+        }
+        .padding(.horizontal, 24)
+        .padding(.top, 24)
+        .padding(.bottom, 64)
+        .opacity(isConnected ? 1 : 0.6)
+        .animation(.smooth, value: viewModel.model.phase)
     }
 }

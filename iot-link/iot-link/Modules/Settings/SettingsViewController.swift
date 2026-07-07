@@ -34,7 +34,7 @@ struct SettingsViewUI: View {
                 Button {
                     viewModel.send(.addDeviceTapped)
                 } label: {
-                    Label("Add Device", systemImage: "plus.circle")
+                    Label(viewModel.model.addDeviceTitle, systemImage: "plus.circle")
                         .fontDesign(.rounded)
                 }
             }

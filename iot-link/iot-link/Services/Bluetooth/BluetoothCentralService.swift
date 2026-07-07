@@ -40,8 +40,9 @@ protocol BluetoothCentralService: Sendable {
     ///   response is unrecognized.
     func provision(_ credentials: WiFiCredentials) async throws -> ProvisioningStatus
     
-    /// Sets the device's status LED (write-without-response), then reads the control
-    /// characteristic back so `ledStatePublisher` reconciles to the device's true state.
+    /// Sets the device's status LED (write-without-response). The peripheral notifies the
+    /// resulting state on the control characteristic, which reconciles `ledStatePublisher`
+    /// to the device's true state.
     func setLED(_ on: Bool) async
 }
 

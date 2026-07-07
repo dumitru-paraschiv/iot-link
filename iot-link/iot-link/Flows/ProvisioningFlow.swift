@@ -15,6 +15,16 @@ enum ProvisioningFlowSteps {
     case finished(provisioned: Bool)
 }
 
+/// Where the provisioning flow begins.
+enum ProvisioningStartMode {
+    
+    /// Full journey from device discovery (the "Add Device" entry).
+    case scan
+    /// Skip discovery and configure Wi-Fi for the already-connected device (the dashboard
+    /// "Set Up Wi-Fi" entry). Cancelling here keeps the connection.
+    case credentials
+}
+
 protocol ProvisioningFlow: NavigationFlow {
     
     var steps: PassthroughSubject<ProvisioningFlowSteps, Never> { get }
@@ -25,20 +35,28 @@ final class DefaultProvisioningFlow: NavigationFlow, ProvisioningFlow, ModuleFac
     let steps = PassthroughSubject<ProvisioningFlowSteps, Never>()
     
     private let bluetoothService: BluetoothCentralService
+    private let startMode: ProvisioningStartMode
     
-    init(r: MainResolver, controller: UINavigationController, bluetoothService: BluetoothCentralService) {
+    init(r: MainResolver,
+         controller: UINavigationController,
+         bluetoothService: BluetoothCentralService,
+         startMode: ProvisioningStartMode) {
         self.bluetoothService = bluetoothService
+        self.startMode = startMode
         super.init(r: r, controller: controller)
     }
     
     override func start() {
-        showScanView(with: ScanModel())
+        switch startMode {
+        case .scan: showScanView(with: ScanModel())
+        case .credentials: showCredentialsView(with: CredentialsModel(), asRoot: true)
+        }
     }
 }
 
 private extension DefaultProvisioningFlow {
     
-    func showCredentialsView(with model: CredentialsModel) {
+    func showCredentialsView(with model: CredentialsModel, asRoot: Bool = false) {
         let view = makeCredentialsView(with: model)
         view.steps.sink { [weak self] in
             switch $0 {
@@ -51,7 +69,12 @@ private extension DefaultProvisioningFlow {
             }
         }
         .store(in: &view.stepsBag)
-        push(view)
+        
+        if asRoot {
+            setRoot(view)
+        } else {
+            push(view)
+        }
     }
     
     func showResultView(with model: ResultModel) {
@@ -82,9 +105,13 @@ private extension DefaultProvisioningFlow {
 
 private extension DefaultProvisioningFlow {
     
-    /// User abandoned provisioning - tear down the BLE connection and finish.
+    /// User abandoned provisioning. In `.scan` mode this tears down the BLE connection
+    /// (they were still choosing a device); in `.credentials` mode the device is already
+    /// connected and in use by the dashboard, so the connection is kept.
     func cancel() {
-        Task { await bluetoothService.disconnect() }
+        if startMode == .scan {
+            Task { await bluetoothService.disconnect() }
+        }
         finish(provisioned: false)
     }
     
@@ -94,10 +121,13 @@ private extension DefaultProvisioningFlow {
     
     /// Resumes after a failure at the point that is actually recoverable: the credentials
     /// form if the device is still connected, or the scan list if it must be found again.
+    /// In `.credentials` mode there is no scan list, so an unreachable failure finishes the
+    /// flow instead (the dashboard's connection-state observation takes over).
     func retry(_ recovery: ResultModel.Recovery) {
         switch recovery {
         case .reenterCredentials: pop()
-        case .rescan: popToRoot()
+        case .rescan where startMode == .scan: popToRoot()
+        case .rescan: finish(provisioned: false)
         }
     }
 }
