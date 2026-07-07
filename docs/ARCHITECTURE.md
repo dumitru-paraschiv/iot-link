@@ -2,7 +2,7 @@
 
 This document details the architectural guidelines, concurrency models, dependency injection layout, and resilience mechanisms implemented in the **IoT-Link** ecosystem.
 
-> **Note:** This document describes the target architecture. The onboarding module, the `BluetoothCentralService` central (scan → connect → discover), and the macOS peripheral simulator (`iot-link-simulator`) are implemented; components such as `ProvisioningFlow` and the telemetry dashboard are designed but not yet built.
+> **Note:** This document describes the target architecture. The onboarding module, the `BluetoothCentralService` central (scan → connect → discover → provision), the `ProvisioningFlow` (scan → credentials → result), and the macOS peripheral simulator (`iot-link-simulator`) are implemented; the telemetry dashboard and exponential back-off reconnection are designed but not yet built.
 
 ---
 
@@ -37,10 +37,12 @@ graph TD
     HomeFlow -->|Add Device Triggered| ProvisioningFlow["ProvisioningFlow (BLE Setup)"]
     SettingsFlow -->|Add Device Triggered| ProvisioningFlow
     
-    %% Provisioning flow
-    ProvisioningFlow --> ProvisioningVC["ProvisioningViewController"]
-    ProvisioningVC --> ProvisioningVM["ProvisioningViewModel"]
-    ProvisioningVM --> BluetoothService
+    %% Provisioning flow (scan → credentials → result)
+    ProvisioningFlow --> ScanVM["ScanViewModel"]
+    ProvisioningFlow --> CredentialsVM["CredentialsViewModel"]
+    ProvisioningFlow --> ResultVM["ResultViewModel"]
+    ScanVM --> BluetoothService
+    CredentialsVM --> BluetoothService
 ```
 
 ---
@@ -67,12 +69,13 @@ The application's navigation is divided into clear, single-responsibility coordi
 * **Trigger**: Tapping "Add Device" launches the `ProvisioningFlow`.
 
 ### 5. ProvisioningFlow (BLE Device Setup)
-* **Purpose**: Performs BLE device scanning, selection, connection, and credential writing.
+* **Purpose**: Coordinates the full "Add Device" journey — scanning, connection, credential writing, and result feedback — across three modules.
+* **Presentation**: Presented modally (with its own `UINavigationController`) from either the Home empty-state or the Settings "Add Device" row.
 * **Flow**:
-  1. Presents `ProvisioningViewController` showing available BLE Peripherals advertising the custom UUID.
-  2. Once a device is chosen, presents the Wi-Fi credentials form.
-  3. Translates credentials to bytes, performs the write transaction, and listens for the validation handshake.
-  4. Upon success, dismisses itself and returns control to the calling flow, transitioning the dashboard to the connected telemetry state.
+  1. **Scan** — shows peripherals advertising the custom service UUID as a live list, sorted by a 3-tier RSSI signal bucket (EMA-smoothed; devices that stop advertising are pruned). Tapping a device connects and discovers characteristics.
+  2. **Credentials** — on reaching `.connected`, pushes the Wi-Fi form. Live validation against the spec byte bounds gates submission; on submit the ViewModel calls `bluetoothService.provision(_:)`.
+  3. **Result** — pushes a success or typed-failure screen from the handshake outcome. Success auto-dismisses the flow after ~1.5 s (keeping the connection for the dashboard); failure offers a recovery-aware "Try Again" — re-enter credentials if the device is still connected, or re-scan if it is gone.
+* **Cleanup**: Cancelling or a lost-device failure calls `bluetoothService.disconnect()`; a successful provision keeps the connection for the telemetry dashboard (Milestone 5).
 
 ---
 
@@ -184,7 +187,7 @@ func subscribeToTelemetry() {
 Dependencies are registered in `ServiceAssembly.swift` and resolved dynamically through a container to prevent tight coupling.
 
 * `BluetoothCentralService` is registered in `ServiceAssembly` with `.container` scope (acting as a shared singleton service during the app's lifecycle).
-* Consuming ViewModels (`ProvisioningViewModel`, `HomeViewModel`) will declare `BluetoothCentralService` as a constructor parameter once those modules are wired in later milestones.
+* Consuming ViewModels declare `BluetoothCentralService` as a constructor parameter: `ScanViewModel` and `CredentialsViewModel` resolve it today; `HomeViewModel` will once the telemetry dashboard is wired.
 
 ```swift
 // ServiceAssembly.swift
@@ -231,13 +234,18 @@ The Bluetooth central transition flow is structured as follows:
 stateDiagram-v2
     [*] --> Idle
     Idle --> Scanning : Bluetooth Powered On & Scanning Activated
-    Scanning --> Connecting : Device Discovered & Match Found
-    Connecting --> Connected : Connection Established
-    Connected --> DiscoveringServices : Device Services Requested
+    Scanning --> Connecting : Device Selected
+    Connecting --> DiscoveringServices : Connection Established
     DiscoveringServices --> DiscoveringCharacteristics : Services Found
-    DiscoveringCharacteristics --> Ready : Telemetry Subscribed & LED Read
-    
+    DiscoveringCharacteristics --> Connected : Characteristics Cached & Provisioning Notify Enabled
+
+    Connected --> Provisioning : Credentials Written
+    Provisioning --> Provisioned : Handshake 0x00 (Success)
+    Provisioning --> Connected : Handshake 0x01 / Timeout (retryable)
+    Provisioned --> Ready : Telemetry Subscribed & LED Read
+
     Ready --> Disconnected : Link Loss / Range Out / Power Off
+    Connected --> Disconnected : Cancelled / Link Loss
     Connecting --> Disconnected : Timeout / Connection Failed
     
     Disconnected --> Reconnecting : Auto-Reconnect Triggered

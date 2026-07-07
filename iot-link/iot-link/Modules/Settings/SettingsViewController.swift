@@ -29,8 +29,15 @@ struct SettingsViewUI: View {
     var viewModel: SettingsViewModel
     
     var body: some View {
-        VStack {
-            
+        List {
+            Section {
+                Button {
+                    viewModel.send(.addDeviceTapped)
+                } label: {
+                    Label("Add Device", systemImage: "plus.circle")
+                        .fontDesign(.rounded)
+                }
+            }
         }
     }
 }

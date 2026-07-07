@@ -55,11 +55,11 @@ iot-link/
     │   │   ├── OnboardingFlow.swift # Handles app feature walkthrough tutorial
     │   │   ├── MainFlow.swift     # TabBar coordinator mapping Home/Settings
     │   │   ├── HomeFlow.swift     # Dashboard and control navigation
-    │   │   └── ProvisioningFlow.swift # Coordinates scanning and BLE credential writing (planned)
+    │   │   └── ProvisioningFlow.swift # Coordinates scan → credentials → result
     │   ├── Modules/               # MVVM UI Modules
     │   │   ├── Onboarding/        # Welcome screens & features walkthrough UI
-    │   │   ├── Provisioning/      # Scanning & Wi-Fi credential input UI (planned)
-    │   │   ├── Home/              # Live Telemetry & Control Dashboard UI
+    │   │   ├── Provisioning/      # Scan list, Wi-Fi credential form, and result screens
+    │   │   ├── Home/              # Live Telemetry & Control Dashboard UI (dashboard planned)
     │   │   └── Settings/          # Configuration & Manual Re-Onboarding / Add Device triggers
     │   ├── Services/              # Core Services (Account, App, BluetoothCentralService)
     │   ├── Factories/             # Factory pattern implementations for Modules and Flows

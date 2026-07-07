@@ -9,6 +9,7 @@ import Combine
 
 enum HomeViewSteps {
     
+    case addDeviceTapped
 }
 
 protocol HomeViewOutput: AnyObject {
@@ -19,6 +20,7 @@ protocol HomeViewOutput: AnyObject {
 enum HomeViewAction {
     
     case viewDidLoad
+    case addDeviceTapped
 }
 
 protocol HomeViewInput {

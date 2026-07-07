@@ -23,6 +23,7 @@ final class SettingsViewModel {
     func send(_ action: SettingsViewAction) {
         switch action {
         case .viewDidLoad: break
+        case .addDeviceTapped: output?.steps.send(.addDeviceTapped)
         }
     }
 }

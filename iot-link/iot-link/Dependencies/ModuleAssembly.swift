@@ -10,6 +10,38 @@ import Swinject
 final class ModuleAssembly: Assembly {
     
     func assemble(container: Container) {
+        container.register(CredentialsView.self) { r, model in
+            let viewModel = CredentialsViewModel(
+                bluetoothService: MainResolver(r).resolve(),
+                model: model
+            )
+            let viewUI = CredentialsViewUI(viewModel: viewModel)
+            let view = CredentialsViewController(rootView: viewUI)
+            
+            #if DEBUG
+            trackDeallocation(for: viewModel)
+            trackDeallocation(for: view)
+            #endif
+            
+            viewModel.bind(output: view)
+            view.viewModel = viewModel
+            return view
+        }
+        
+        container.register(HomeView.self) { r, model in
+            let viewModel = HomeViewModel(model: model)
+            let viewUI = HomeViewUI(viewModel: viewModel)
+            let view = HomeViewController(rootView: viewUI)
+            
+            #if DEBUG
+            trackDeallocation(for: viewModel)
+            trackDeallocation(for: view)
+            #endif
+            
+            viewModel.bind(output: view)
+            view.viewModel = viewModel
+            return view
+        }
         
         container.register(OnboardingView.self) { r, model in
             let viewModel = OnboardingViewModel(
@@ -29,10 +61,28 @@ final class ModuleAssembly: Assembly {
             return view
         }
         
-        container.register(HomeView.self) { r, model in
-            let viewModel = HomeViewModel(model: model)
-            let viewUI = HomeViewUI(viewModel: viewModel)
-            let view = HomeViewController(rootView: viewUI)
+        container.register(ResultView.self) { r, model in
+            let viewModel = ResultViewModel(model: model)
+            let viewUI = ResultViewUI(viewModel: viewModel)
+            let view = ResultViewController(rootView: viewUI)
+            
+            #if DEBUG
+            trackDeallocation(for: viewModel)
+            trackDeallocation(for: view)
+            #endif
+            
+            viewModel.bind(output: view)
+            view.viewModel = viewModel
+            return view
+        }
+        
+        container.register(ScanView.self) { r, model in
+            let viewModel = ScanViewModel(
+                bluetoothService: MainResolver(r).resolve(),
+                model: model
+            )
+            let viewUI = ScanViewUI(viewModel: viewModel)
+            let view = ScanViewController(rootView: viewUI)
             
             #if DEBUG
             trackDeallocation(for: viewModel)

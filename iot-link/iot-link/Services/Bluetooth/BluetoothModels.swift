@@ -9,9 +9,9 @@ import Foundation
 
 /// Lifecycle of the BLE central, mirroring the state machine in `docs/ARCHITECTURE.md`.
 ///
-/// Milestone 2 stops at `.connected` (services + characteristics discovered & cached).
-/// The `.ready` (telemetry subscribed) and reconnection states are introduced in later
-/// milestones.
+/// Milestone 2 reaches `.connected` (services + characteristics discovered & cached);
+/// Milestone 4 adds the provisioning sub-states. The `.ready` (telemetry subscribed) and
+/// reconnection states are introduced in later milestones.
 nonisolated enum BluetoothState: Sendable, Equatable {
     
     case unknown
@@ -23,6 +23,8 @@ nonisolated enum BluetoothState: Sendable, Equatable {
     case discoveringServices
     case discoveringCharacteristics
     case connected
+    case provisioning
+    case provisioned
     case disconnected
 }
 

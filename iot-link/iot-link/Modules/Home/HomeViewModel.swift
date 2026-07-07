@@ -5,6 +5,7 @@
 //  Created by Dumitru Paraschiv on 01.07.2026.
 //
 
+import Combine
 import Observation
 
 @MainActor
@@ -22,6 +23,7 @@ final class HomeViewModel {
     func send(_ action: HomeViewAction) {
         switch action {
         case .viewDidLoad: break
+        case .addDeviceTapped: output?.steps.send(.addDeviceTapped)
         }
     }
 }

@@ -23,6 +23,8 @@ nonisolated final class CentralDelegateProxy: NSObject, CBCentralManagerDelegate
     var onDisconnect: SendableCallback<UncheckedSendable<CBPeripheral>>?
     var onDiscoverServices: SendableCallback<UncheckedSendable<CBPeripheral>>?
     var onDiscoverCharacteristics: SendableCallback<UncheckedSendable<CBService>>?
+    var onWriteValue: SendableCallback<(UncheckedSendable<CBCharacteristic>, UncheckedSendable<Error?>)>?
+    var onUpdateValue: SendableCallback<UncheckedSendable<CBCharacteristic>>?
 }
 
 // MARK: - CBCentralManagerDelegate
@@ -71,5 +73,17 @@ extension CentralDelegateProxy {
                                 didDiscoverCharacteristicsFor service: CBService,
                                 error: Error?) {
         onDiscoverCharacteristics?(UncheckedSendable(service))
+    }
+    
+    nonisolated func peripheral(_ peripheral: CBPeripheral,
+                                didWriteValueFor characteristic: CBCharacteristic,
+                                error: Error?) {
+        onWriteValue?((UncheckedSendable(characteristic), UncheckedSendable(error)))
+    }
+    
+    nonisolated func peripheral(_ peripheral: CBPeripheral,
+                                didUpdateValueFor characteristic: CBCharacteristic,
+                                error: Error?) {
+        onUpdateValue?(UncheckedSendable(characteristic))
     }
 }

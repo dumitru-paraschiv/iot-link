@@ -53,14 +53,21 @@ This plan outlines the code generation stages for **IoT-Link**, utilizing a Git 
   * Interactive CLI (`KeyboardCommands`, raw-mode stdin): `l` toggle LED, `t` pause/resume telemetry, `d` drop connection, `q` quit; unmapped keys log a hint.
   * Configured the CLI target to embed an Info.plist (`GENERATE_INFOPLIST_FILE` + `CREATE_INFOPLIST_SECTION_IN_BINARY`) carrying `NSBluetoothAlwaysUsageDescription`, so the macOS Bluetooth permission prompt appears reliably on a reviewer's machine.
 
-### 🏁 Milestone 4: BLE Device Provisioning Flow
+### ✅ Milestone 4: BLE Device Provisioning Flow
 * **Branch**: `feature/ble-provisioning`
-* **Commit Message**: `feat(provisioning): implement ProvisioningFlow coordinator and Wi-Fi credential binary serialization`
-* **Changes**:
-  * Create `ProvisioningFlow` coordinator.
-  * Create `ProvisioningViewModel` and `ProvisioningViewController` showing scanning lists and Wi-Fi inputs.
-  * Implement byte serialization logic mapping `[SSID Length] + [Password Length] + [SSID Data] + [Password Data]` to be written to characteristic `E0C00002-C3B6-4B22-9F1C-123456789ABC`.
-  * Handle the provisioning notification handshake response from the peripheral.
+* **Scope**: The end-to-end "Add Device" journey — scan → connect → discover → write Wi-Fi credentials → observe the `0x00`/`0x01` handshake. Split into three commits by impact (service → flow/scan → form/result).
+* **Commit 1 — `feat(service): provisioning write + handshake`**:
+  * Extended `BluetoothCentralService` with `provision(_:) async throws -> ProvisioningStatus`: serializes the packet, writes `.withResponse`, and suspends on a `CheckedContinuation` resumed by the status-byte notification or a 10 s timeout (single-resume guard, `.notReady` on disconnect).
+  * Enabled notifications on the provisioning characteristic at discovery; added `onWriteValue`/`onUpdateValue` callbacks to `CentralDelegateProxy`.
+  * Added `ProvisioningModels.swift` (`WiFiCredentials` + `serialize()` per `GATT_SPEC.md`, `ProvisioningStatus`, `ProvisioningError`) and the `.provisioning`/`.provisioned` states.
+* **Commit 2 — `feat(provisioning): flow + BLE scan list`**:
+  * Added `ProvisioningFlow` coordinator (presented modally from the Home empty-state and a Settings "Add Device" row) and the `Scan` module.
+  * Live scan list sorted by a 3-tier RSSI signal bucket, tap-to-connect, with EMA smoothing and time-based pruning of devices that stop advertising (duplicate-allowed scanning).
+  * Marked shared `Optional`/`Sequence`/`Collection`/`Bool` utilities `nonisolated` as needed for actor-safe use.
+* **Commit 3 — `feat(provisioning): Wi-Fi credential form and result screens`**:
+  * Added the `Credentials` module (live validation against spec byte bounds, password reveal) and the `Result` module (success auto-dismiss; typed failure with recovery-aware "Try Again" — re-enter credentials if the device is still connected, or re-scan if it is gone).
+  * Hardened the scan/credentials lifecycle: scan only navigates for a connection it initiated (ignoring replayed `.connected`) and restarts scanning on appear; credentials observes connection state only while on top.
+  * Centralized per-screen navigation-bar visibility via `prefersNavigationBarHidden` on the base controllers, applied in sync with the push/pop transition.
 
 ### 🏁 Milestone 5: Telemetry Dashboard & Control UI
 * **Branch**: `feature/telemetry-dashboard`
