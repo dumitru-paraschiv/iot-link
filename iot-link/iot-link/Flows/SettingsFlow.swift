@@ -31,10 +31,13 @@ private extension DefaultSettingsFlow {
     func showProvisioningFlow() {
         let provisioningNavigationController = UINavigationController()
         provisioningNavigationController.title = "ProvisioningNavigationController"
-        let provisioningFlow = makeProvisioningFlow(navigationController: provisioningNavigationController)
+        let provisioningFlow = makeProvisioningFlow(
+            navigationController: provisioningNavigationController,
+            startMode: .scan
+        )
         provisioningFlow.steps.sink { [weak self, weak provisioningFlow] in
             switch $0 {
-            case let .finished(provisioned): provisioningFlow.flatMap { self?.dismiss($0) }
+            case .finished: provisioningFlow.flatMap { self?.dismiss($0) }
             }
         }
         .store(in: &provisioningFlow.stepsBag)

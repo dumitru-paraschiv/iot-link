@@ -2,7 +2,7 @@
 
 This document details the architectural guidelines, concurrency models, dependency injection layout, and resilience mechanisms implemented in the **IoT-Link** ecosystem.
 
-> **Note:** This document describes the target architecture. The onboarding module, the `BluetoothCentralService` central (scan → connect → discover → provision), the `ProvisioningFlow` (scan → credentials → result), and the macOS peripheral simulator (`iot-link-simulator`) are implemented; the telemetry dashboard and exponential back-off reconnection are designed but not yet built.
+> **Note:** This document describes the target architecture. The onboarding module, the `BluetoothCentralService` central (scan → connect → discover → provision → telemetry/LED), the `ProvisioningFlow` (scan → credentials → result), the Home telemetry dashboard, and the macOS peripheral simulator (`iot-link-simulator`) are implemented; exponential back-off reconnection (the "connection lost" state is its UI hook) is designed but not yet built.
 
 ---
 
@@ -65,8 +65,8 @@ The application's navigation is divided into clear, single-responsibility coordi
 
 ### 4. HomeFlow & Telemetry Dashboard
 * **Purpose**: Coordinates the telemetry dashboard view (`HomeViewController`).
-* **Logic**: Exposes status widgets. If no device is currently provisioned/connected, it displays an empty state prompt with an "Add Device" button.
-* **Trigger**: Tapping "Add Device" launches the `ProvisioningFlow`.
+* **Logic**: `HomeViewModel` observes the service's connection state and derives a phase — **empty** (no device: prompt + "Add Device"), **dashboard** (connected: device header, live temperature/humidity gauges, LED toggle, Disconnect), or **connectionLost** (dropped link: dimmed dashboard + banner, pending Milestone 6 auto-reconnect). It subscribes to the telemetry, LED, and connected-device publishers to render live data, and toggles the LED optimistically (reconciled by the control characteristic's notification).
+* **Triggers**: "Add Device" launches `ProvisioningFlow` in `.scan` mode; the dashboard's "Set Up Wi-Fi" launches it in `.credentials` mode (skips discovery for the already-connected device).
 
 ### 5. ProvisioningFlow (BLE Device Setup)
 * **Purpose**: Coordinates the full "Add Device" journey — scanning, connection, credential writing, and result feedback — across three modules.
@@ -157,7 +157,7 @@ proxy.onDiscover = { [weak self] peripheral, rssi in
 ```
 
 ### 3. State Exposure via Combine
-The service exposes state through `CurrentValueSubject`-backed publishers (so late subscribers replay the latest value), mirroring the `steps` subject pattern used across the codebase. The subjects are `nonisolated(unsafe)` and only ever `send(...)` from inside the actor. An `AsyncStream` is reserved for the high-frequency telemetry stream in a later milestone.
+The service exposes everything — connection state, discovered peripherals, telemetry, LED state, and the connected device — through `CurrentValueSubject`-backed publishers (so late subscribers replay the latest value), mirroring the `steps` subject pattern used across the codebase. The subjects are `nonisolated(unsafe)` and only ever `send(...)` from inside the actor. Telemetry stays on Combine too rather than `AsyncStream`: at ~1 Hz there is no backpressure concern, and one streaming idiom keeps the ViewModels uniform.
 ```swift
 nonisolated var statePublisher: AnyPublisher<BluetoothState, Never> {
     stateSubject.eraseToAnyPublisher()
@@ -165,16 +165,17 @@ nonisolated var statePublisher: AnyPublisher<BluetoothState, Never> {
 ```
 
 ### 4. Main Actor Transition
-ViewModels (already `@MainActor`) subscribe to these publishers and route updates into their model through named setters, keeping the model's stored properties `private(set)`.
+ViewModels (already `@MainActor`) subscribe to these publishers via `.receive(on:)` and route updates into their model through named setters, keeping the model's stored properties `private(set)`.
 ```swift
-func subscribeToTelemetry() {
-    Task { @MainActor in
-        for await telemetry in bluetoothService.telemetryStream {
+func observeTelemetry() {
+    bluetoothService.telemetryPublisher
+        .receive(on: DispatchQueue.main)
+        .sink { [weak self] telemetry in
             // Mutation is routed through a named setter on the model,
             // keeping its stored properties `private(set)`.
-            model.set(telemetry: telemetry)
+            self?.model.accept(telemetry: telemetry)
         }
-    }
+        .store(in: &cancellables)
 }
 ```
 
@@ -187,7 +188,7 @@ func subscribeToTelemetry() {
 Dependencies are registered in `ServiceAssembly.swift` and resolved dynamically through a container to prevent tight coupling.
 
 * `BluetoothCentralService` is registered in `ServiceAssembly` with `.container` scope (acting as a shared singleton service during the app's lifecycle).
-* Consuming ViewModels declare `BluetoothCentralService` as a constructor parameter: `ScanViewModel` and `CredentialsViewModel` resolve it today; `HomeViewModel` will once the telemetry dashboard is wired.
+* Consuming ViewModels declare `BluetoothCentralService` as a constructor parameter: `ScanViewModel`, `CredentialsViewModel`, `HomeViewModel`, and `SettingsViewModel` all resolve it.
 
 ```swift
 // ServiceAssembly.swift

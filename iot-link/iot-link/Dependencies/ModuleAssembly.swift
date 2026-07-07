@@ -29,7 +29,10 @@ final class ModuleAssembly: Assembly {
         }
         
         container.register(HomeView.self) { r, model in
-            let viewModel = HomeViewModel(model: model)
+            let viewModel = HomeViewModel(
+                bluetoothService: MainResolver(r).resolve(),
+                model: model
+            )
             let viewUI = HomeViewUI(viewModel: viewModel)
             let view = HomeViewController(rootView: viewUI)
             
@@ -95,7 +98,10 @@ final class ModuleAssembly: Assembly {
         }
         
         container.register(SettingsView.self) { r, model in
-            let viewModel = SettingsViewModel(model: model)
+            let viewModel = SettingsViewModel(
+                bluetoothService: MainResolver(r).resolve(),
+                model: model
+            )
             let viewUI = SettingsViewUI(viewModel: viewModel)
             let view = SettingsViewController(rootView: viewUI)
             

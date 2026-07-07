@@ -69,15 +69,18 @@ This plan outlines the code generation stages for **IoT-Link**, utilizing a Git 
   * Hardened the scan/credentials lifecycle: scan only navigates for a connection it initiated (ignoring replayed `.connected`) and restarts scanning on appear; credentials observes connection state only while on top.
   * Centralized per-screen navigation-bar visibility via `prefersNavigationBarHidden` on the base controllers, applied in sync with the push/pop transition.
 
-### 🏁 Milestone 5: Telemetry Dashboard & Control UI
+### ✅ Milestone 5: Telemetry Dashboard & Control UI
 * **Branch**: `feature/telemetry-dashboard`
-* **Commit Message**: `feat(dashboard): implement telemetry decoding and live dashboard UI`
-* **Changes**:
-  * Update `HomeViewModel` to bind to `BluetoothCentralService` streams.
-  * Implement raw Big-Endian Int16 parsing using `withUnsafeBytes` to decode Temperature & Humidity values.
-  * Build the SwiftUI gauge/graph indicators inside `HomeView`.
-  * Add a toggle control to write `0x01` / `0x00` without response to the LED status characteristic.
-  * Handle the empty/disconnected state with a prompt and "Add Device" button.
+* **Scope**: Turns Home into a live dashboard — subscribes to the peripheral's telemetry, renders it, and toggles the status LED. Split into two commits by the service/UI boundary.
+* **Commit 1 — `feat(service): telemetry stream and LED control with notify`**:
+  * Added `TelemetryModels` (central-side `TelemetryReading` with Big-Endian `Int16 ÷ 100` parse, `LEDState` 1-byte codec, `ConnectedDevice`), mirroring the wire contract in `GATT_SPEC.md`.
+  * Extended `BluetoothCentralService` with `telemetryPublisher`, `ledStatePublisher`, `connectedDevicePublisher` (`CurrentValueSubject`-backed) and `setLED(_:)`; auto-enables telemetry + control notifications at discovery; routes `handleUpdateValue` by characteristic UUID.
+  * Made the control characteristic **Notify** (spec + simulator + central): the peripheral pushes LED state on any change — a central write or the simulator's local toggle — so the app stays in sync without polling; `setLED` is a plain write-without-response reconciled by the notification.
+* **Commit 2 — `feat(dashboard): live telemetry and LED control UI`**:
+  * Rebuilt the `Home` module: `HomeModel` derives a `Phase` (empty / dashboard / connectionLost) from the connection state; `HomeViewModel` observes the four service publishers; optimistic LED toggle reconciled by the notification.
+  * Dashboard shows a device header, two SwiftUI `Gauge`s (temperature/humidity), an LED toggle, and a Disconnect control; a dropped link shows a recoverable "connection lost" state.
+  * Added a `ProvisioningStartMode` (scan vs credentials) so a dashboard "Set Up Wi-Fi" entry opens provisioning at the credentials step for the already-connected device (keeping the connection on cancel).
+  * Settings shows "Replace Device" instead of "Add Device" while connected, reflecting that opening the scanner drops the current device.
 
 ### 🏁 Milestone 6: Resiliency & Unit Tests
 * **Branch**: `feature/tests-and-resiliency`

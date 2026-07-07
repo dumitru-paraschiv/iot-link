@@ -43,7 +43,7 @@ actor SimulatorPeripheral {
         )
         controlCharacteristic = CBMutableCharacteristic(
             type: GATTProfile.Characteristic.control,
-            properties: [.read, .writeWithoutResponse],
+            properties: [.read, .writeWithoutResponse, .notify],
             value: nil,
             permissions: [.readable, .writeable]
         )
@@ -60,11 +60,10 @@ actor SimulatorPeripheral {
     
     // MARK: - Keyboard Commands
     
-    /// Toggles the LED locally (as if a physical button were pressed) and notifies any
-    /// reader on the next read; logs the change.
+    /// Toggles the LED locally (as if a physical button were pressed), notifying any
+    /// subscribed central of the new state.
     func toggleLED() {
-        ledState = ledState.toggled
-        log(.control, "LED \(ledState == .on ? "ON" : "OFF") (local toggle)")
+        setLED(ledState.toggled, source: "local toggle")
     }
     
     /// Pauses or resumes telemetry emission without unsubscribing.
@@ -181,10 +180,20 @@ private extension SimulatorPeripheral {
     }
     
     func handleControlWrite(_ request: CBATTRequest) {
-        // WriteWithoutResponse: CoreBluetooth does not expect a `respond(to:)` here, but
-        // when writes are delivered as a batch the first request must still be answered.
-        ledState = Serialization.decodeLED(request.value ?? Data())
-        log(.control, "write → LED \(ledState == .on ? "ON" : "OFF")")
+        // WriteWithoutResponse: CoreBluetooth does not expect a `respond(to:)` here.
+        setLED(Serialization.decodeLED(request.value ?? Data()), source: "write")
+    }
+    
+    /// Updates the LED state and notifies subscribed centrals of the change, so the app's
+    /// control reflects the device's true state regardless of what caused the change.
+    func setLED(_ state: LEDState, source: String) {
+        ledState = state
+        log(.control, "LED \(state == .on ? "ON" : "OFF") (\(source))")
+        manager.updateValue(
+            Serialization.encodeLED(state),
+            for: controlCharacteristic,
+            onSubscribedCentrals: nil
+        )
     }
     
     func handleProvisioningWrite(_ request: CBATTRequest) {

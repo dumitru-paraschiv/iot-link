@@ -47,11 +47,12 @@ final class FlowAssembly: Assembly {
             return flow
         }
         
-        container.register(ProvisioningFlow.self) { r, navigationController in
+        container.register(ProvisioningFlow.self) { r, navigationController, startMode in
             let flow = DefaultProvisioningFlow(
                 r: MainResolver(r),
                 controller: navigationController,
-                bluetoothService: MainResolver(r).resolve()
+                bluetoothService: MainResolver(r).resolve(),
+                startMode: startMode
             )
             #if DEBUG
             trackDeallocation(for: flow)
