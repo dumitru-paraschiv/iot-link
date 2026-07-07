@@ -99,6 +99,19 @@ actor DefaultBluetoothCentralService: BluetoothCentralService {
     /// How often the prune task checks for stale peripherals.
     private let pruneInterval: Duration = .seconds(1)
     
+    /// Back-off schedule for recovering an unexpectedly dropped link.
+    private let reconnectionPolicy: ReconnectionPolicy
+    
+    /// Set when the user (or a flow) tears down the connection deliberately, so an ensuing
+    /// disconnect callback does not trigger the reconnection loop.
+    private var intentionalDisconnect = false
+    
+    /// Zero-based index of the current reconnection attempt; reset on a successful connect.
+    private var reconnectAttempt = 0
+    
+    /// In-flight back-off task awaiting the next reconnection attempt.
+    private var reconnectTask: Task<Void, Never>?
+    
     // Subjects are mutated only from within the actor; exposed read-only as publishers.
     nonisolated(unsafe) private let stateSubject = CurrentValueSubject<BluetoothState, Never>(.unknown)
     nonisolated(unsafe) private let peripheralsSubject = CurrentValueSubject<[DiscoveredPeripheral], Never>([])
@@ -126,7 +139,8 @@ actor DefaultBluetoothCentralService: BluetoothCentralService {
         ledStateSubject.eraseToAnyPublisher()
     }
     
-    init() {
+    init(reconnectionPolicy: ReconnectionPolicy = ReconnectionPolicy()) {
+        self.reconnectionPolicy = reconnectionPolicy
         centralManager = CBCentralManager(delegate: proxy, queue: centralQueue)
         wireProxy()
     }
@@ -163,6 +177,11 @@ actor DefaultBluetoothCentralService: BluetoothCentralService {
             trace("no discovered peripheral for id <\(id)>")
             return
         }
+        // Fresh user-initiated connection: clear any prior reconnection state.
+        cancelReconnect()
+        reconnectAttempt = 0
+        intentionalDisconnect = false
+        
         centralManager.stopScan()
         activePeripheral = peripheral
         stateSubject.send(.connecting)
@@ -171,7 +190,21 @@ actor DefaultBluetoothCentralService: BluetoothCentralService {
     
     func disconnect() {
         finishProvisioning(with: .failure(ProvisioningError.notReady))
-        guard let peripheral = activePeripheral else { return }
+        
+        // Mark this as deliberate so the disconnect callback tears down terminally instead
+        // of starting the reconnection loop. Also cancel any in-flight back-off (e.g. the
+        // user tapped Disconnect from the "Reconnecting…" state).
+        intentionalDisconnect = true
+        cancelReconnect()
+        
+        guard let peripheral = activePeripheral else {
+            // No live peripheral. When reconnection was exhausted the state is already
+            // `.disconnected` with cleared teardown, so there is nothing to do. In every
+            // other case (e.g. the scan screen dropping a non-existent link while idle),
+            // emitting `.disconnected` here would wrongly flip the dashboard into its lost
+            // state, so we deliberately do nothing.
+            return
+        }
         centralManager.cancelPeripheralConnection(peripheral)
     }
     
@@ -251,10 +284,11 @@ private extension DefaultBluetoothCentralService {
             Task { await self?.handleConnect(peripheral.value) }
         }
         proxy.onFailToConnect = { [weak self] _ in
-            Task { await self?.handleDisconnect() }
+            // A failed initial connection is not recovered by the back-off loop.
+            Task { await self?.handleConnectionFailure() }
         }
         proxy.onDisconnect = { [weak self] _ in
-            Task { await self?.handleDisconnect() }
+            Task { await self?.handleUnexpectedDisconnect() }
         }
         proxy.onDiscoverServices = { [weak self] peripheral in
             Task { await self?.handleDiscoverServices(peripheral.value) }
@@ -363,6 +397,11 @@ private extension DefaultBluetoothCentralService {
             connectedDeviceSubject.send(ConnectedDevice(id: peripheral.identifier, name: peripheral.name))
         }
         
+        // A fully established link resets the reconnection budget (whether this was a first
+        // connection or a successful recovery).
+        reconnectAttempt = 0
+        intentionalDisconnect = false
+        
         stateSubject.send(.connected)
     }
     
@@ -396,14 +435,80 @@ private extension DefaultBluetoothCentralService {
         finishProvisioning(with: .success(status))
     }
     
-    func handleDisconnect() {
+    /// An established link dropped without us asking. If the drop was deliberate, tear down
+    /// terminally; otherwise begin (or continue) the back-off reconnection loop.
+    func handleUnexpectedDisconnect() {
         finishProvisioning(with: .failure(ProvisioningError.notReady))
+        
+        guard intentionalDisconnect.isFalse else {
+            handleDisconnect()
+            return
+        }
+        scheduleReconnect()
+    }
+    
+    /// `centralManager.connect(_:)` failed. During a reconnection cycle this is just a
+    /// failed attempt — keep backing off; during an initial connection it is terminal.
+    func handleConnectionFailure() {
+        finishProvisioning(with: .failure(ProvisioningError.notReady))
+        
+        if reconnectAttempt > 0 {
+            scheduleReconnect()
+        } else {
+            handleDisconnect()
+        }
+    }
+    
+    /// Terminal teardown: clear all connection state and publish `.disconnected`.
+    func handleDisconnect() {
+        cancelReconnect()
+        reconnectAttempt = 0
+        intentionalDisconnect = false
         activePeripheral = nil
         characteristics.removeAll()
         connectedDeviceSubject.send(nil)
         telemetrySubject.send(nil)
         ledStateSubject.send(nil)
         stateSubject.send(.disconnected)
+    }
+}
+
+// MARK: - Reconnection
+
+private extension DefaultBluetoothCentralService {
+    
+    /// Schedules the next back-off reconnection attempt, or gives up terminally once the
+    /// policy's attempt budget is exhausted.
+    func scheduleReconnect() {
+        guard let peripheral = activePeripheral,
+              reconnectionPolicy.allowsAttempt(reconnectAttempt) else {
+            handleDisconnect()
+            return
+        }
+        
+        // Live telemetry/LED are stale while the link is down; clear them but keep the
+        // peripheral and its identity so the dashboard shows "Reconnecting…" for this device.
+        characteristics.removeAll()
+        telemetrySubject.send(nil)
+        ledStateSubject.send(nil)
+        stateSubject.send(.reconnecting)
+        
+        let delay = reconnectionPolicy.delay(forAttempt: reconnectAttempt)
+        reconnectTask = Task { [weak self] in
+            try? await Task.sleep(for: delay)
+            guard Task.isCancelled.isFalse else { return }
+            await self?.attemptReconnect(peripheral)
+        }
+    }
+    
+    func attemptReconnect(_ peripheral: CBPeripheral) {
+        reconnectAttempt += 1
+        centralManager.connect(peripheral)
+    }
+    
+    func cancelReconnect() {
+        reconnectTask?.cancel()
+        reconnectTask = nil
     }
 }
 

@@ -10,8 +10,8 @@ import Foundation
 /// Lifecycle of the BLE central, mirroring the state machine in `docs/ARCHITECTURE.md`.
 ///
 /// Milestone 2 reaches `.connected` (services + characteristics discovered & cached);
-/// Milestone 4 adds the provisioning sub-states. The `.ready` (telemetry subscribed) and
-/// reconnection states are introduced in later milestones.
+/// Milestone 4 adds the provisioning sub-states; Milestone 6 adds `.reconnecting` for the
+/// exponential back-off recovery loop.
 nonisolated enum BluetoothState: Sendable, Equatable {
     
     case unknown
@@ -25,6 +25,9 @@ nonisolated enum BluetoothState: Sendable, Equatable {
     case connected
     case provisioning
     case provisioned
+    /// An unexpected drop is being recovered via back-off attempts.
+    case reconnecting
+    /// Terminally disconnected — either intentional or after reconnection was exhausted.
     case disconnected
 }
 

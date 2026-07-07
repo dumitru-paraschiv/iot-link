@@ -67,7 +67,9 @@ enum HomeModelBuilder {
     static func makePhase(from state: BluetoothState) -> HomeModel.Phase? {
         switch state {
         case .connected, .provisioned: .dashboard
-        case .disconnected: .connectionLost
+        // A clean disconnect — user Disconnect, provisioning cancel, or reconnection
+        // exhausted — means no device: return to the empty "Add Device" prompt.
+        case .disconnected: .empty
         default: nil
         }
     }
