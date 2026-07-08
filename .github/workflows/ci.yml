@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  test-ios-app:
+    name: Build & Test (iOS App)
+    runs-on: macos-26
+    defaults:
+      run:
+        working-directory: iot-link
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -switch /Applications/Xcode_26.6.app/Contents/Developer
+
+      - name: Resolve Swift package dependencies
+        run: xcodebuild -resolvePackageDependencies -project iot-link.xcodeproj -scheme iot-link
+
+      - name: Build and test
+        run: |
+          xcodebuild test \
+            -project iot-link.xcodeproj \
+            -scheme iot-link \
+            -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+            -only-testing:iot-linkTests
+
+  build-simulator:
+    name: Build (macOS Peripheral Simulator)
+    runs-on: macos-26
+    defaults:
+      run:
+        working-directory: iot-link
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -switch /Applications/Xcode_26.6.app/Contents/Developer
+
+      - name: Build
+        run: |
+          xcodebuild build \
+            -project iot-link.xcodeproj \
+            -scheme iot-link-simulator \
+            -destination 'platform=macOS'

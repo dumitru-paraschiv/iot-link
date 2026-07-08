@@ -1,4 +1,13 @@
+<p align="center">
+  <img src="docs/images/app-icon.png" width="120" alt="IoT-Link app icon" />
+</p>
+
 # IoT-Link
+
+[![CI](https://github.com/dumitru-paraschiv/iot-link/actions/workflows/ci.yml/badge.svg)](https://github.com/dumitru-paraschiv/iot-link/actions/workflows/ci.yml)
+[![Swift](https://img.shields.io/badge/Swift-6.0-F05138?logo=swift&logoColor=white)](https://www.swift.org)
+[![Platform](https://img.shields.io/badge/iOS-17.0%2B-000000?logo=apple&logoColor=white)](https://developer.apple.com/ios/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 **IoT-Link** is an iOS proof-of-concept (PoC) ecosystem designed to demonstrate mobile-to-hardware communication in the consumer IoT space. The project serves as a technical portfolio piece showcasing best practices in iOS development—featuring `CoreBluetooth` lifecycle management, custom GATT profiles, raw binary serialization, thread-safe background processing, and robust auto-reconnection flows.
 
@@ -6,7 +15,7 @@
 
 ## ⚙️ Prerequisites
 
-* **Xcode 16+** (Swift 6.0)
+* **Xcode 26+** (Swift 6.0) — the app icon uses the Icon Composer `.icon` format, which requires Xcode 26 or later
 * **iOS 17.0+** deployment target
 * **macOS 14.0+** for the peripheral simulator
 * After cloning, open the project and let Xcode resolve Swift Package Manager dependencies (Swinject) automatically, or run **File → Packages → Resolve Package Versions**.
