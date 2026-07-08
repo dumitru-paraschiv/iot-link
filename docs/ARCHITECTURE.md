@@ -2,7 +2,7 @@
 
 This document details the architectural guidelines, concurrency models, dependency injection layout, and resilience mechanisms implemented in the **IoT-Link** ecosystem.
 
-> **Note:** All planned features are implemented — the onboarding module, the `BluetoothCentralService` central (scan → connect → discover → provision → telemetry/LED), the `ProvisioningFlow` (scan → credentials → result), the Home telemetry dashboard, exponential back-off reconnection (with its "Reconnecting…" dashboard state), and the macOS peripheral simulator (`iot-link-simulator`). Unit tests are the remaining milestone (Milestone 7 in `IMPLEMENTATION_PLAN.md`).
+> **Note:** All planned milestones are implemented — the onboarding module, the `BluetoothCentralService` central (scan → connect → discover → provision → telemetry/LED), the `ProvisioningFlow` (scan → credentials → result), the Home telemetry dashboard, exponential back-off reconnection (with its "Reconnecting…" dashboard state), the macOS peripheral simulator (`iot-link-simulator`), and the deterministic unit-test suite (Milestone 7 — see the Testing Strategy section below).
 
 ---
 
@@ -284,3 +284,31 @@ nonisolated struct ReconnectionPolicy: Sendable {
 * **Per-attempt connect timeout**: `CBCentralManager.connect(_:)` never times out on its own, so each attempt arms a 10 s watchdog task that fails the attempt and advances the loop; it is cancelled the moment the connect resolves.
 * **Budget & reset**: a fully established link (characteristics cached) resets the attempt counter; exhausting `maxAttempts` — or the user tapping Disconnect mid-loop — cancels the in-flight back-off task and publishes a terminal `.disconnected`, which the Home dashboard maps back to its empty "Add Device" phase.
 * **Initial connections are not retried**: a failure while connecting for the first time (user-initiated from the scan list) is terminal; the back-off loop only recovers links that were previously established.
+
+---
+
+## 🧪 Testing Strategy
+
+The unit suite (`iot-linkTests`, Swift Testing — `@Suite`/`@Test`/`#expect`) pins the pure logic shipped across Milestones 1–6: 10 suites, 67 test cases, fully deterministic, no BLE radio or UI required.
+
+### Determinism Hooks
+Two production seams exist specifically so tests can remove nondeterminism:
+* `ReconnectionPolicy`'s jitter generator is an injected closure — tests pin it to a constant, making the back-off curve exactly assertable (`Duration` equality, not tolerances).
+* `DefaultAccountService` takes an injected `UserDefaults` (default `.standard`), so persistence tests run against per-test, UUID-named `UserDefaults(suiteName:)` instances wiped in `deinit` — no bleed into the real app domain or between parallel tests.
+
+### Cross-Target Wire-Contract Round-Trip
+The iOS app and the macOS simulator deliberately share no code — `GATT_SPEC.md` is their only coupling. To pin that contract in CI-runnable form, the simulator's `Serialization.swift` and `PeripheralModels.swift` are additionally compiled into the test target (a `PBXFileSystemSynchronizedBuildFileExceptionSet` in the project file), and `WireContractRoundTripTests` proves the two independent codec implementations agree byte-for-byte in both directions (credentials app→sim, telemetry sim→app, LED both ways, malformed-packet rejection).
+
+Because the simulator's `WiFiCredentials`/`TelemetryReading`/`LEDState`/`ProvisioningStatus` share names with the app's types, the simulator's declarations shadow unqualified lookup inside the test target; test files reference the app's types through explicit `private typealias App… = iot_link.<Type>` aliases.
+
+### Coverage Map
+| Suite | Pins |
+| :-- | :-- |
+| `WiFiCredentialsTests` | Provisioning packet layout, UTF-8 byte counting, 32/64 bounds, rejection cases |
+| `TelemetryCodecTests` | Big-Endian `Int16 ÷ 100` decode, negative temperatures, length validation |
+| `ControlCodecTests` | `LEDState` 1-byte codec, `ProvisioningStatus` raw bytes `0x00`–`0x03` |
+| `WireContractRoundTripTests` | Central ⇄ simulator byte-level agreement |
+| `ReconnectionPolicyTests` | `baseDelay × 2ⁿ + jitter` curve, negative-attempt clamp, budget boundary |
+| `AccountServiceTests` / `UserDefaultsExtensionsTests` | Onboarding persistence, typed get/set/remove |
+| `HomeModelBuilderTests` | Exhaustive 13-case `BluetoothState → Phase` table (`makePhase` uses `default:`, so new cases must be added to the table by hand) |
+| `ValueHelpersTests` | The `nonisolated` shared helpers used across isolation domains |

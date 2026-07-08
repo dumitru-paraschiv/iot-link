@@ -67,7 +67,7 @@ iot-link/
     │   ├── Factories/             # Factory pattern implementations for Modules and Flows
     │   └── Common/                # Types, Extensions, and Swift Helpers
     ├── iot-link-simulator/        # macOS Simulator CLI Target (CBPeripheralManager)
-    ├── iot-linkTests/             # Unit test target (populated in Milestone 7)
+    ├── iot-linkTests/             # Unit tests: wire codecs, cross-target round-trip, back-off policy, persistence, phase mapping
     └── iot-linkUITests/           # UI test target
 ```
 
@@ -98,9 +98,19 @@ To test BLE interaction:
 * **Option A (Real Device - Recommended)**: Build and run the `iot-link` target on a physical iPhone/iPad. Ensure Bluetooth is enabled on both your Mac and your iOS device.
 * **Option B (Simulator Limits)**: Please note that the Xcode iOS Simulator **does not support CoreBluetooth Central APIs** for physical BLE hardware. Running the app on a physical device is required to establish a connection with the macOS CLI Peripheral simulator.
 
+### 3. Run the Unit Tests
+The unit suite is deterministic and needs **no BLE radio** — it runs fine on the Xcode iOS Simulator. Select the `iot-link` scheme and press `Cmd + U`, or from the terminal:
+
+```bash
+xcodebuild test -project iot-link/iot-link.xcodeproj -scheme iot-link \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:iot-linkTests
+```
+
+The suite covers the GATT wire codecs, a cross-target round-trip proving the app's and simulator's independent codec implementations agree byte-for-byte, the reconnection back-off policy, onboarding persistence, and the dashboard phase mapping — see the Testing Strategy section in [ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
 ---
 
 ## 📄 Associated Documents
 
 * Refer to [GATT_SPEC.md](docs/GATT_SPEC.md) for custom BLE characteristics and raw byte layout definitions.
-* Refer to [ARCHITECTURE.md](docs/ARCHITECTURE.md) for details on thread safety, Swinject integration, and reconnection back-off math.
+* Refer to [ARCHITECTURE.md](docs/ARCHITECTURE.md) for details on thread safety, Swinject integration, reconnection back-off math, and the unit-testing strategy.
