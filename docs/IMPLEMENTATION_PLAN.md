@@ -93,20 +93,22 @@ This plan outlines the code generation stages for **IoT-Link**, utilizing a Git 
   * Renamed the Home `connectionLost` phase to `reconnecting`: dimmed dashboard with a spinner "Reconnecting…" banner and an orange header status. A clean `.disconnected` (user action or exhausted budget) now maps to the **empty** "Add Device" phase instead.
   * Added a 10 s per-attempt connect timeout in the service (`CBCentralManager.connect` never times out on its own), so a vanished device advances the back-off loop instead of hanging it; the watchdog is cancelled the moment the connect resolves.
 
-### 🏁 Milestone 7: Unit Tests
+### ✅ Milestone 7: Unit Tests
 * **Branch**: `feature/unit-tests`
-* **Commit Message**: `test: add unit tests for wire codecs, back-off policy, persistence, and dashboard phase derivation`
-* **Rationale**: Milestones 1–6 shipped without tests, but their pure logic was deliberately factored to be testable without a BLE radio or UI — value-type codecs, an injectable jitter generator, protocol-backed services, and a pure state→phase mapping. This milestone locks that logic in via deterministic unit tests in the `iot-linkTests` target.
-* **Changes**:
+* **Rationale**: Milestones 1–6 shipped without tests, but their pure logic was deliberately factored to be testable without a BLE radio or UI — value-type codecs, an injectable jitter generator, protocol-backed services, and a pure state→phase mapping. This milestone locks that logic in via deterministic unit tests in the `iot-linkTests` target (Swift Testing; 10 suites across 9 files, 67 test cases counting parameterized expansions). Split into two commits by impact (enabler → suite).
+* **Commit 1 — `refactor(service): inject UserDefaults into AccountService for testability`**:
+  * `DefaultAccountService` gained `init(defaults: UserDefaults = .standard)`; the default argument keeps the `ServiceAssembly` registration untouched, while tests run against isolated, wipeable `UserDefaults(suiteName:)` instances.
+* **Commit 2 — `test: add unit tests for wire codecs, back-off policy, persistence, and dashboard phase derivation`**:
   * **Wire codecs** (against `GATT_SPEC.md`):
-    * `WiFiCredentials.serialize()` — byte layout (length prefixes + UTF-8 payloads), and `nil` on inputs violating the spec byte bounds.
-    * `TelemetryReading.parse(from:)` — Big-Endian `Int16 ÷ 100` decoding, negative temperatures, and rejection of truncated payloads.
-    * `LEDState` 1-byte codec round-trip and `ProvisioningStatus` raw-byte mapping (`0x00`/`0x01`).
-  * **Cross-target round-trip**: compile the simulator's `Serialization.swift` into the test target and prove the central's `serialize()` output decodes to the same credentials on the peripheral side (and simulator telemetry encoding parses back on the central side) — the two targets share no code, so this pins the wire contract.
-  * **`ReconnectionPolicy`** — delay curve `baseDelay × 2ⁿ` with pinned jitter, negative-attempt clamping to attempt 0, and the `allowsAttempt` budget boundary (`maxAttempts − 1` allowed, `maxAttempts` refused).
-  * **`AccountService` persistence** — `isOnboarded` defaults to `false`, `completeOnboarding()` persists, exercised through the typed `UserDefaults` get/set/remove extensions against an isolated suite (no bleed into the real app domain).
-  * **`HomeModelBuilder.makePhase(from:)`** — full `BluetoothState` → `Phase` mapping: `connected`/`provisioned` → dashboard, `reconnecting` → reconnecting, `disconnected` → empty, transitional states → `nil`.
-  * **Shared value helpers** — `Optional.orFalse`/`orTrue`-style conveniences and the `Collection`/`Sequence`/`Bool` extensions relied on across isolation domains.
+    * `WiFiCredentials.serialize()` — exact byte layout (length prefixes + UTF-8 payloads), multibyte SSIDs counted in bytes, boundary 32/64 acceptance, empty password allowed (open network), and `nil` on inputs violating the spec byte bounds.
+    * `TelemetryReading.parse(from:)` — Big-Endian `Int16 ÷ 100` decoding, negative temperatures via the bit pattern, and rejection of non-4-byte payloads.
+    * `LEDState` 1-byte codec round-trip (any non-`0x01` byte → `.off`) and `ProvisioningStatus` raw-byte mapping (`0x00`–`0x03`, unknown bytes rejected).
+  * **Cross-target round-trip**: the simulator's `Serialization.swift` + `PeripheralModels.swift` are compiled into the test target via a pbxproj `PBXFileSystemSynchronizedBuildFileExceptionSet`, and the suite proves the central's `serialize()` output decodes to the same credentials on the peripheral side (and simulator telemetry encoding parses back on the central side, within the ±0.005 fixed-point rounding bound) — the two targets share no code, so this pins the wire contract. The simulator's same-named types shadow the app's inside the test target, so app types are referenced through `private typealias App… = iot_link.<Type>` aliases.
+  * **`ReconnectionPolicy`** — delay curve `baseDelay × 2ⁿ` with pinned jitter (exact `Duration` equality), negative-attempt clamping to attempt 0, and the `allowsAttempt` budget boundary (`maxAttempts − 1` allowed, `maxAttempts` refused).
+  * **`AccountService` persistence** — `isOnboarded` defaults to `false`, `completeOnboarding()` persists across service instances, exercised through the typed `UserDefaults` get/set/remove extensions against per-test UUID-named suites wiped in `deinit` (no bleed into the real app domain).
+  * **`HomeModelBuilder.makePhase(from:)`** — exhaustive 13-case `BluetoothState` → `Phase` table: `connected`/`provisioned` → dashboard, `reconnecting` → reconnecting, `disconnected` → empty, transitional states → `nil`. (`makePhase` falls through `default:`, so a new enum case must be added to the table by hand — it is not compiler-surfaced.)
+  * **Shared value helpers** — `Optional.isNone`/`isSome`/`orFalse`/`orEmpty`, `Collection.isNotEmpty`, `Bool.isFalse`, `Sequence.unique`/`notContains`, and the `String`/`Array` helpers relied on across isolation domains.
+  * Deleted the Xcode template stub `iot_linkTests.swift`.
 
 ---
 

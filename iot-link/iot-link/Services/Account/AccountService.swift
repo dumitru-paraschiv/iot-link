@@ -16,11 +16,17 @@ protocol AccountService: Sendable {
 
 actor DefaultAccountService: AccountService {
     
-    var isOnboarded: Bool {
-        UserDefaults.standard.get(Bool.self, forKey: .isAppOnboarded).orFalse
+    nonisolated(unsafe) private let userDefaults: UserDefaults
+    
+    init(userDefaults: UserDefaults = .standard) {
+        self.userDefaults = userDefaults
     }
-
+    
+    var isOnboarded: Bool {
+        userDefaults.get(Bool.self, forKey: .isAppOnboarded).orFalse
+    }
+    
     func completeOnboarding() {
-        UserDefaults.standard.set(true, forKey: .isAppOnboarded)
+        userDefaults.set(true, forKey: .isAppOnboarded)
     }
 }

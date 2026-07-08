@@ -54,11 +54,22 @@
 			);
 			target = 2A427F5B2FF5896F00C3F82E /* iot-link */;
 		};
+		2AFFFF012FF5897100C3F82E /* Exceptions for "iot-link-simulator" folder in "iot-linkTests" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				PeripheralModels.swift,
+				Serialization.swift,
+			);
+			target = 2A427F712FF5897100C3F82E /* iot-linkTests */;
+		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		2A2A00E52FFB26B7002C6FE5 /* iot-link-simulator */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				2AFFFF012FF5897100C3F82E /* Exceptions for "iot-link-simulator" folder in "iot-linkTests" target */,
+			);
 			path = "iot-link-simulator";
 			sourceTree = "<group>";
 		};
