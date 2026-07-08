@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/images/app-icon.png" width="120" alt="IoT-Link app icon" />
+</p>
+
 # IoT-Link
 
 [![CI](https://github.com/dumitru-paraschiv/iot-link/actions/workflows/ci.yml/badge.svg)](https://github.com/dumitru-paraschiv/iot-link/actions/workflows/ci.yml)
