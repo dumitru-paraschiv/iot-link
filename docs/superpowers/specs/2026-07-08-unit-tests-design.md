@@ -112,8 +112,9 @@ The two targets share no code; these tests pin the wire contract itself:
 - Exhaustive 13-case `BluetoothState → HomeModel.Phase?` table:
   `connected`/`provisioned` → `.dashboard`; `reconnecting` → `.reconnecting`;
   `disconnected` → `.empty`; the nine transitional/radio states → `nil`.
-- Written as a parameterized table over explicit cases (no `switch` in the test), so
-  adding an enum case surfaces in the service's `switch`, not silently here.
+- Written as a parameterized table over explicit cases (no `switch` in the test). Note:
+  `makePhase` uses a `default:` branch, so a new enum case is not compiler-surfaced —
+  the table must be extended by hand when a case is added.
 
 ### ValueHelpersTests
 
