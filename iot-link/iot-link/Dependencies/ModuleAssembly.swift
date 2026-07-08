@@ -1,0 +1,118 @@
+//
+//  ModuleAssembly.swift
+//  iot-link
+//
+//  Created by Dumitru Paraschiv on 01.07.2026.
+//
+
+import Swinject
+
+final class ModuleAssembly: Assembly {
+    
+    func assemble(container: Container) {
+        container.register(CredentialsView.self) { r, model in
+            let viewModel = CredentialsViewModel(
+                bluetoothService: MainResolver(r).resolve(),
+                model: model
+            )
+            let viewUI = CredentialsViewUI(viewModel: viewModel)
+            let view = CredentialsViewController(rootView: viewUI)
+            
+            #if DEBUG
+            trackDeallocation(for: viewModel)
+            trackDeallocation(for: view)
+            #endif
+            
+            viewModel.bind(output: view)
+            view.viewModel = viewModel
+            return view
+        }
+        
+        container.register(HomeView.self) { r, model in
+            let viewModel = HomeViewModel(
+                bluetoothService: MainResolver(r).resolve(),
+                model: model
+            )
+            let viewUI = HomeViewUI(viewModel: viewModel)
+            let view = HomeViewController(rootView: viewUI)
+            
+            #if DEBUG
+            trackDeallocation(for: viewModel)
+            trackDeallocation(for: view)
+            #endif
+            
+            viewModel.bind(output: view)
+            view.viewModel = viewModel
+            return view
+        }
+        
+        container.register(OnboardingView.self) { r, model in
+            let viewModel = OnboardingViewModel(
+                accountService: MainResolver(r).resolve(),
+                model: model
+            )
+            let viewUI = OnboardingViewUI(viewModel: viewModel)
+            let view = OnboardingViewController(rootView: viewUI)
+            
+            #if DEBUG
+            trackDeallocation(for: viewModel)
+            trackDeallocation(for: view)
+            #endif
+            
+            viewModel.bind(output: view)
+            view.viewModel = viewModel
+            return view
+        }
+        
+        container.register(ResultView.self) { r, model in
+            let viewModel = ResultViewModel(model: model)
+            let viewUI = ResultViewUI(viewModel: viewModel)
+            let view = ResultViewController(rootView: viewUI)
+            
+            #if DEBUG
+            trackDeallocation(for: viewModel)
+            trackDeallocation(for: view)
+            #endif
+            
+            viewModel.bind(output: view)
+            view.viewModel = viewModel
+            return view
+        }
+        
+        container.register(ScanView.self) { r, model in
+            let viewModel = ScanViewModel(
+                bluetoothService: MainResolver(r).resolve(),
+                model: model
+            )
+            let viewUI = ScanViewUI(viewModel: viewModel)
+            let view = ScanViewController(rootView: viewUI)
+            
+            #if DEBUG
+            trackDeallocation(for: viewModel)
+            trackDeallocation(for: view)
+            #endif
+            
+            viewModel.bind(output: view)
+            view.viewModel = viewModel
+            return view
+        }
+        
+        container.register(SettingsView.self) { r, model in
+            let viewModel = SettingsViewModel(
+                bluetoothService: MainResolver(r).resolve(),
+                model: model
+            )
+            let viewUI = SettingsViewUI(viewModel: viewModel)
+            let view = SettingsViewController(rootView: viewUI)
+            
+            #if DEBUG
+            trackDeallocation(for: viewModel)
+            trackDeallocation(for: view)
+            #endif
+            
+            viewModel.bind(output: view)
+            view.viewModel = viewModel
+            return view
+        }
+    }
+}
