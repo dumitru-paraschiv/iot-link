@@ -9,20 +9,26 @@ import SwiftUI
 
 enum HomeViewComponents {
     
-    // MARK: ConnectionLostBanner
+    // MARK: ReconnectingBanner
     
-    struct ConnectionLostBanner: View {
+    struct ReconnectingBanner: View {
         
         var body: some View {
-            Label("Connection lost", systemImage: "wifi.exclamationmark")
-                .font(.subheadline)
-                .fontWeight(.medium)
-                .fontDesign(.rounded)
-                .foregroundStyle(.white)
-                .frame(minWidth: .zero, maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background(Color.orange)
-                .clipShape(.capsule)
+            HStack(spacing: 8) {
+                ProgressView()
+                    .tint(.white)
+                    .controlSize(.small)
+                
+                Text("Reconnecting…")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .fontDesign(.rounded)
+                    .foregroundStyle(.white)
+            }
+            .frame(minWidth: .zero, maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(Color.orange)
+            .clipShape(.capsule)
         }
     }
     
@@ -45,10 +51,10 @@ enum HomeViewComponents {
                         .fontWeight(.semibold)
                         .fontDesign(.rounded)
                     
-                    Text(isConnected ? "Connected" : "Offline")
+                    Text(isConnected ? "Connected" : "Reconnecting…")
                         .font(.caption)
                         .fontDesign(.rounded)
-                        .foregroundStyle(isConnected ? .green : .secondary)
+                        .foregroundStyle(isConnected ? .green : .orange)
                 }
                 
                 Spacer()

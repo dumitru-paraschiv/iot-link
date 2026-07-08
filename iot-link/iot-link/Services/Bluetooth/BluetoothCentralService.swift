@@ -112,6 +112,14 @@ actor DefaultBluetoothCentralService: BluetoothCentralService {
     /// In-flight back-off task awaiting the next reconnection attempt.
     private var reconnectTask: Task<Void, Never>?
     
+    /// How long a single reconnection `connect(_:)` may pend before it's treated as failed.
+    /// `CBCentralManager.connect` has no built-in timeout, so without this a reconnection to
+    /// a device that never returns would hang the loop indefinitely.
+    private let connectTimeout: Duration = .seconds(10)
+    
+    /// Watches the current reconnection `connect(_:)` and fails it if it pends too long.
+    private var connectTimeoutTask: Task<Void, Never>?
+    
     // Subjects are mutated only from within the actor; exposed read-only as publishers.
     nonisolated(unsafe) private let stateSubject = CurrentValueSubject<BluetoothState, Never>(.unknown)
     nonisolated(unsafe) private let peripheralsSubject = CurrentValueSubject<[DiscoveredPeripheral], Never>([])
@@ -358,6 +366,9 @@ private extension DefaultBluetoothCentralService {
     }
     
     func handleConnect(_ peripheral: CBPeripheral) {
+        // The connect resolved — stop the reconnection connect-timeout so it can't fire
+        // mid-session and drop a healthy link.
+        cancelConnectTimeout()
         peripheral.delegate = proxy
         stateSubject.send(.discoveringServices)
         peripheral.discoverServices([GATTProfile.service])
@@ -480,6 +491,9 @@ private extension DefaultBluetoothCentralService {
     /// Schedules the next back-off reconnection attempt, or gives up terminally once the
     /// policy's attempt budget is exhausted.
     func scheduleReconnect() {
+        // Clear any prior attempt's connect-timeout before scheduling the next one.
+        cancelConnectTimeout()
+        
         guard let peripheral = activePeripheral,
               reconnectionPolicy.allowsAttempt(reconnectAttempt) else {
             handleDisconnect()
@@ -504,11 +518,34 @@ private extension DefaultBluetoothCentralService {
     func attemptReconnect(_ peripheral: CBPeripheral) {
         reconnectAttempt += 1
         centralManager.connect(peripheral)
+        startConnectTimeout(for: peripheral)
+    }
+    
+    /// Fails a reconnection attempt whose `connect(_:)` never resolved, so the loop can
+    /// advance to the next back-off delay (or exhaust) instead of hanging.
+    func startConnectTimeout(for peripheral: CBPeripheral) {
+        connectTimeoutTask = Task { [weak self, connectTimeout] in
+            try? await Task.sleep(for: connectTimeout)
+            guard Task.isCancelled.isFalse else { return }
+            await self?.handleConnectTimeout(peripheral)
+        }
+    }
+    
+    func handleConnectTimeout(_ peripheral: CBPeripheral) {
+        // Cancel the pending connect so CoreBluetooth stops trying, then continue the loop.
+        centralManager.cancelPeripheralConnection(peripheral)
+        scheduleReconnect()
     }
     
     func cancelReconnect() {
         reconnectTask?.cancel()
         reconnectTask = nil
+        cancelConnectTimeout()
+    }
+    
+    func cancelConnectTimeout() {
+        connectTimeoutTask?.cancel()
+        connectTimeoutTask = nil
     }
 }
 
