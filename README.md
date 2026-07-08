@@ -6,7 +6,7 @@
 
 ## ⚙️ Prerequisites
 
-* **Xcode 16+** (Swift 6.0)
+* **Xcode 26+** (Swift 6.0) — the app icon uses the Icon Composer `.icon` format, which requires Xcode 26 or later
 * **iOS 17.0+** deployment target
 * **macOS 14.0+** for the peripheral simulator
 * After cloning, open the project and let Xcode resolve Swift Package Manager dependencies (Swinject) automatically, or run **File → Packages → Resolve Package Versions**.
