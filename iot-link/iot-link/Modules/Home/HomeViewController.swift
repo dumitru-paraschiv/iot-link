@@ -34,7 +34,7 @@ struct HomeViewUI: View {
             emptyState
         case .dashboard:
             dashboard(isConnected: true)
-        case .connectionLost:
+        case .reconnecting:
             dashboard(isConnected: false)
         }
     }
@@ -97,7 +97,7 @@ private extension HomeViewUI {
             )
             
             if isConnected.isFalse {
-                HomeViewComponents.ConnectionLostBanner()
+                HomeViewComponents.ReconnectingBanner()
             }
             
             HStack(spacing: 16) {

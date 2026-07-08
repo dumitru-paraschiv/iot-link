@@ -26,7 +26,9 @@ struct HomeModel {
         
         case empty
         case dashboard
-        case connectionLost
+        /// The link dropped and back-off reconnection is in progress. Exhaustion emits a
+        /// clean `.disconnected` that returns to `.empty`.
+        case reconnecting
     }
 }
 
@@ -67,7 +69,10 @@ enum HomeModelBuilder {
     static func makePhase(from state: BluetoothState) -> HomeModel.Phase? {
         switch state {
         case .connected, .provisioned: .dashboard
-        case .disconnected: .connectionLost
+        case .reconnecting: .reconnecting
+        // A clean disconnect — user Disconnect, provisioning cancel, or reconnection
+        // exhausted — means no device: return to the empty "Add Device" prompt.
+        case .disconnected: .empty
         default: nil
         }
     }
