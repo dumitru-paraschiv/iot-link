@@ -82,14 +82,31 @@ This plan outlines the code generation stages for **IoT-Link**, utilizing a Git 
   * Added a `ProvisioningStartMode` (scan vs credentials) so a dashboard "Set Up Wi-Fi" entry opens provisioning at the credentials step for the already-connected device (keeping the connection on cancel).
   * Settings shows "Replace Device" instead of "Add Device" while connected, reflecting that opening the scanner drops the current device.
 
-### 🏁 Milestone 6: Resiliency & Unit Tests
-* **Branch**: `feature/tests-and-resiliency`
-* **Commit Message**: `feat(resiliency): implement exponential back-off reconnection and add unit tests`
+### ✅ Milestone 6: Resiliency — Exponential Back-Off Reconnection
+* **Branch**: `feature/resiliency` (the unit-test scope originally planned here moved to Milestone 7)
+* **Scope**: Recovers an unexpectedly dropped link automatically instead of bouncing the user back to scanning. Split into two commits by the service/UI boundary.
+* **Commit 1 — `feat(resiliency): exponential back-off reconnection`**:
+  * Added `ReconnectionPolicy` — a `Sendable` value type computing `Delay(n) = baseDelay × 2ⁿ + jitter` (defaults: 2 s base, 5 attempts) with `allowsAttempt(_:)` gating the budget. The jitter generator is injectable so unit tests can pin it to a fixed value.
+  * Extended `BluetoothCentralService`: an unexpected disconnect enters the new `.reconnecting` state and schedules attempts via the policy; an `intentionalDisconnect` flag distinguishes deliberate tear-down (user Disconnect, provisioning cancel) so it stays terminal; a fully established link resets the attempt counter; exhaustion — or a failed *initial* connection — tears down terminally to `.disconnected`.
+  * While the link is down, stale telemetry/LED values are cleared but the connected-device identity is kept, so the dashboard can show who it is reconnecting to.
+* **Commit 2 — `feat(dashboard): reconnecting state`**:
+  * Renamed the Home `connectionLost` phase to `reconnecting`: dimmed dashboard with a spinner "Reconnecting…" banner and an orange header status. A clean `.disconnected` (user action or exhausted budget) now maps to the **empty** "Add Device" phase instead.
+  * Added a 10 s per-attempt connect timeout in the service (`CBCentralManager.connect` never times out on its own), so a vanished device advances the back-off loop instead of hanging it; the watchdog is cancelled the moment the connect resolves.
+
+### 🏁 Milestone 7: Unit Tests
+* **Branch**: `feature/unit-tests`
+* **Commit Message**: `test: add unit tests for wire codecs, back-off policy, persistence, and dashboard phase derivation`
+* **Rationale**: Milestones 1–6 shipped without tests, but their pure logic was deliberately factored to be testable without a BLE radio or UI — value-type codecs, an injectable jitter generator, protocol-backed services, and a pure state→phase mapping. This milestone locks that logic in via deterministic unit tests in the `iot-linkTests` target.
 * **Changes**:
-  * Add the exponential back-off reconnection scheduling algorithm inside the `BluetoothCentralService`.
-  * Add unit tests for packet serialization/deserialization.
-  * Add unit tests for back-off delay calculations.
-  * Add unit tests for `AccountService` persistence logic.
+  * **Wire codecs** (against `GATT_SPEC.md`):
+    * `WiFiCredentials.serialize()` — byte layout (length prefixes + UTF-8 payloads), and `nil` on inputs violating the spec byte bounds.
+    * `TelemetryReading.parse(from:)` — Big-Endian `Int16 ÷ 100` decoding, negative temperatures, and rejection of truncated payloads.
+    * `LEDState` 1-byte codec round-trip and `ProvisioningStatus` raw-byte mapping (`0x00`/`0x01`).
+  * **Cross-target round-trip**: compile the simulator's `Serialization.swift` into the test target and prove the central's `serialize()` output decodes to the same credentials on the peripheral side (and simulator telemetry encoding parses back on the central side) — the two targets share no code, so this pins the wire contract.
+  * **`ReconnectionPolicy`** — delay curve `baseDelay × 2ⁿ` with pinned jitter, negative-attempt clamping to attempt 0, and the `allowsAttempt` budget boundary (`maxAttempts − 1` allowed, `maxAttempts` refused).
+  * **`AccountService` persistence** — `isOnboarded` defaults to `false`, `completeOnboarding()` persists, exercised through the typed `UserDefaults` get/set/remove extensions against an isolated suite (no bleed into the real app domain).
+  * **`HomeModelBuilder.makePhase(from:)`** — full `BluetoothState` → `Phase` mapping: `connected`/`provisioned` → dashboard, `reconnecting` → reconnecting, `disconnected` → empty, transitional states → `nil`.
+  * **Shared value helpers** — `Optional.orFalse`/`orTrue`-style conveniences and the `Collection`/`Sequence`/`Bool` extensions relied on across isolation domains.
 
 ---
 

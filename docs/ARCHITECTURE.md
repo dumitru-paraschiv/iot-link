@@ -2,7 +2,7 @@
 
 This document details the architectural guidelines, concurrency models, dependency injection layout, and resilience mechanisms implemented in the **IoT-Link** ecosystem.
 
-> **Note:** This document describes the target architecture. The onboarding module, the `BluetoothCentralService` central (scan → connect → discover → provision → telemetry/LED), the `ProvisioningFlow` (scan → credentials → result), the Home telemetry dashboard, and the macOS peripheral simulator (`iot-link-simulator`) are implemented; exponential back-off reconnection (the "connection lost" state is its UI hook) is designed but not yet built.
+> **Note:** All planned features are implemented — the onboarding module, the `BluetoothCentralService` central (scan → connect → discover → provision → telemetry/LED), the `ProvisioningFlow` (scan → credentials → result), the Home telemetry dashboard, exponential back-off reconnection (with its "Reconnecting…" dashboard state), and the macOS peripheral simulator (`iot-link-simulator`). Unit tests are the remaining milestone (Milestone 7 in `IMPLEMENTATION_PLAN.md`).
 
 ---
 
@@ -65,7 +65,7 @@ The application's navigation is divided into clear, single-responsibility coordi
 
 ### 4. HomeFlow & Telemetry Dashboard
 * **Purpose**: Coordinates the telemetry dashboard view (`HomeViewController`).
-* **Logic**: `HomeViewModel` observes the service's connection state and derives a phase — **empty** (no device: prompt + "Add Device"), **dashboard** (connected: device header, live temperature/humidity gauges, LED toggle, Disconnect), or **connectionLost** (dropped link: dimmed dashboard + banner, pending Milestone 6 auto-reconnect). It subscribes to the telemetry, LED, and connected-device publishers to render live data, and toggles the LED optimistically (reconciled by the control characteristic's notification).
+* **Logic**: `HomeViewModel` observes the service's connection state and derives a phase — **empty** (no device: prompt + "Add Device"; also the landing state after a clean disconnect or an exhausted reconnection budget), **dashboard** (connected: device header, live temperature/humidity gauges, LED toggle, Disconnect), or **reconnecting** (dropped link: dimmed dashboard with a spinner "Reconnecting…" banner while the service runs its back-off loop). It subscribes to the telemetry, LED, and connected-device publishers to render live data, and toggles the LED optimistically (reconciled by the control characteristic's notification).
 * **Triggers**: "Add Device" launches `ProvisioningFlow` in `.scan` mode; the dashboard's "Set Up Wi-Fi" launches it in `.credentials` mode (skips discovery for the already-connected device).
 
 ### 5. ProvisioningFlow (BLE Device Setup)
@@ -238,45 +238,49 @@ stateDiagram-v2
     Scanning --> Connecting : Device Selected
     Connecting --> DiscoveringServices : Connection Established
     DiscoveringServices --> DiscoveringCharacteristics : Services Found
-    DiscoveringCharacteristics --> Connected : Characteristics Cached & Provisioning Notify Enabled
+    DiscoveringCharacteristics --> Connected : Characteristics Cached & Notifications Enabled
 
     Connected --> Provisioning : Credentials Written
     Provisioning --> Provisioned : Handshake 0x00 (Success)
     Provisioning --> Connected : Handshake 0x01 / Timeout (retryable)
-    Provisioned --> Ready : Telemetry Subscribed & LED Read
 
-    Ready --> Disconnected : Link Loss / Range Out / Power Off
-    Connected --> Disconnected : Cancelled / Link Loss
-    Connecting --> Disconnected : Timeout / Connection Failed
-    
-    Disconnected --> Reconnecting : Auto-Reconnect Triggered
-    Reconnecting --> Connecting : Back-off Interval Expired
-    Reconnecting --> Idle : Max Retries Exceeded / Cancelled
+    Connected --> Reconnecting : Unexpected Link Loss
+    Provisioned --> Reconnecting : Unexpected Link Loss
+    Reconnecting --> DiscoveringServices : Reconnect Attempt Succeeded
+    Reconnecting --> Reconnecting : Attempt Failed / 10 s Connect Timeout → Next Back-Off
+    Reconnecting --> Disconnected : Attempts Exhausted / User Disconnect
+
+    Connected --> Disconnected : User Disconnect
+    Provisioned --> Disconnected : User Disconnect
+    Connecting --> Disconnected : Initial Connection Failed
 ```
 
 ### 📉 Exponential Reconnection Back-Off Resiliency
-When a peripheral disconnects unexpectedly, the system implements an automated exponential back-off reconnection loop. This prevents spamming the radio and draining battery resources on both the iOS device and the peripheral.
+When a peripheral disconnects unexpectedly, the service runs an automated exponential back-off reconnection loop. This prevents spamming the radio and draining battery resources on both the iOS device and the peripheral.
 
 #### Reconnection Formula:
 $$\text{Delay}_n = \text{Base Delay} \times 2^n + \text{jitter}$$
 
 * \(n\): The current reconnection attempt index (\(0, 1, 2, \dots\)).
-* \(\text{Base Delay}\): Initial delay, e.g., `2.0 seconds`.
-* \(\text{jitter}\): A small randomized value to prevent sync collisions on multiple reconnecting clients.
+* \(\text{Base Delay}\): Initial delay — `2.0 seconds` by default.
+* \(\text{jitter}\): A small randomized value (`0…0.5 s`) to prevent sync collisions on multiple reconnecting clients.
+
+The schedule lives in `ReconnectionPolicy`, a `Sendable` value type injected into `DefaultBluetoothCentralService`. The jitter generator is a closure parameter so unit tests can pin it to a fixed value:
 
 ```swift
-func handleDisconnect(peripheral: CBPeripheral) {
-    guard currentAttempt < maxAttempts else {
-        self.state = .disconnected
-        return
-    }
-    
-    let baseDelay: TimeInterval = 2.0
-    let delay = baseDelay * pow(2.0, Double(currentAttempt)) + Double.random(in: 0...0.5)
-    
-    Task {
-        try await Task.sleep(for: .seconds(delay))
-        self.connect(to: peripheral)
-    }
+nonisolated struct ReconnectionPolicy: Sendable {
+    let baseDelay: Duration          // default .seconds(2)
+    let maxAttempts: Int             // default 5
+    private let jitter: @Sendable () -> Double
+
+    func delay(forAttempt attempt: Int) -> Duration { … }  // baseDelay × 2ⁿ + jitter
+    func allowsAttempt(_ attempt: Int) -> Bool { attempt < maxAttempts }
 }
 ```
+
+#### Loop Mechanics (inside the actor)
+* **Deliberate vs unexpected**: `disconnect()` sets an `intentionalDisconnect` flag before cancelling the connection, so the ensuing delegate callback tears down terminally. Any other disconnect enters `.reconnecting` and schedules the next attempt.
+* **Stale data, kept identity**: on entering `.reconnecting` the cached characteristics and the telemetry/LED subjects are cleared (their live values are stale), but the connected-device identity is kept so the dashboard shows which device it is reconnecting to.
+* **Per-attempt connect timeout**: `CBCentralManager.connect(_:)` never times out on its own, so each attempt arms a 10 s watchdog task that fails the attempt and advances the loop; it is cancelled the moment the connect resolves.
+* **Budget & reset**: a fully established link (characteristics cached) resets the attempt counter; exhausting `maxAttempts` — or the user tapping Disconnect mid-loop — cancels the in-flight back-off task and publishes a terminal `.disconnected`, which the Home dashboard maps back to its empty "Add Device" phase.
+* **Initial connections are not retried**: a failure while connecting for the first time (user-initiated from the scan list) is terminal; the back-off loop only recovers links that were previously established.

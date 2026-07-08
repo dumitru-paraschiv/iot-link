@@ -44,8 +44,10 @@ The project uses a structured, modular Clean MVVM architecture with Flow (Coordi
 ```text
 iot-link/
 ├── README.md                      # Project overview and target configurations
-├── GATT_SPEC.md                   # Custom GATT specifications and byte layouts
-├── ARCHITECTURE.md                # Concurrency, state machine, and reconnection logic
+├── docs/
+│   ├── GATT_SPEC.md               # Custom GATT specifications and byte layouts
+│   ├── ARCHITECTURE.md            # Concurrency, state machine, and reconnection logic
+│   └── IMPLEMENTATION_PLAN.md     # Git-driven milestone plan and per-milestone status
 └── iot-link/                      # Main Xcode Workspace
     ├── iot-link/                  # iOS App Source Target
     │   ├── Core/                  # App Entry Point, Delegates (App, Scene)
@@ -61,11 +63,11 @@ iot-link/
     │   │   ├── Provisioning/      # Scan list, Wi-Fi credential form, and result screens
     │   │   ├── Home/              # Live Telemetry & Control Dashboard UI
     │   │   └── Settings/          # Configuration & Manual Re-Onboarding / Add Device triggers
-    │   ├── Services/              # Core Services (Account, App, BluetoothCentralService)
+    │   ├── Services/              # Core Services (Account, App, Diagnostics, Bluetooth incl. ReconnectionPolicy)
     │   ├── Factories/             # Factory pattern implementations for Modules and Flows
     │   └── Common/                # Types, Extensions, and Swift Helpers
     ├── iot-link-simulator/        # macOS Simulator CLI Target (CBPeripheralManager)
-    ├── iot-linkTests/             # Unit test target
+    ├── iot-linkTests/             # Unit test target (populated in Milestone 7)
     └── iot-linkUITests/           # UI test target
 ```
 
