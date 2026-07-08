@@ -1,5 +1,10 @@
 # IoT-Link
 
+[![CI](https://github.com/dumitru-paraschiv/iot-link/actions/workflows/ci.yml/badge.svg)](https://github.com/dumitru-paraschiv/iot-link/actions/workflows/ci.yml)
+[![Swift](https://img.shields.io/badge/Swift-6.0-F05138?logo=swift&logoColor=white)](https://www.swift.org)
+[![Platform](https://img.shields.io/badge/iOS-17.0%2B-000000?logo=apple&logoColor=white)](https://developer.apple.com/ios/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 **IoT-Link** is an iOS proof-of-concept (PoC) ecosystem designed to demonstrate mobile-to-hardware communication in the consumer IoT space. The project serves as a technical portfolio piece showcasing best practices in iOS development—featuring `CoreBluetooth` lifecycle management, custom GATT profiles, raw binary serialization, thread-safe background processing, and robust auto-reconnection flows.
 
 ---
