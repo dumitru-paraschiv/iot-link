@@ -137,7 +137,15 @@ Both Views and Flows expose a Combine `PassthroughSubject` named `steps`. A View
 `CoreBluetooth` is notorious for blocking UI drawing thread cycles if callbacks execute on the Main Queue. Compounding this, the project builds with `-default-isolation=MainActor` (Swift's approachable-concurrency mode), so any unannotated type is inferred `@MainActor` — which collides with CoreBluetooth's background delegate callbacks. The `BluetoothCentralService` resolves both with an **actor + delegate-proxy** design.
 
 ### 1. Actor-Owned Central
-`DefaultBluetoothCentralService` is an `actor` that owns the `CBCentralManager`, the connection state machine, the discovered-peripheral map, and the cached characteristics. All CoreBluetooth *calls* (`scanForPeripherals`, `connect`, `discoverServices`, …) are made from actor-isolated methods, and the manager runs on a dedicated background queue.
+`DefaultBluetoothCentralService` is an `actor` that owns the `CBCentralManager`, the connection state machine, and the cached characteristics. All CoreBluetooth *calls* (`scanForPeripherals`, `connect`, `discoverServices`, …) are made from actor-isolated methods, and the manager runs on a dedicated background queue.
+
+Three stateful subsystems — reconnection back-off, the provisioning handshake, and
+discovered-peripheral bookkeeping — are factored out into `ReconnectionCoordinator`,
+`ProvisioningCoordinator`, and `PeripheralDiscoveryStore` (`Services/Bluetooth/
+BluetoothCentralService/`). Each is a `nonisolated`, synchronous, `Sendable` value type: it
+holds state and answers decisions ("what's the next delay", "resume this handshake") but
+makes no CoreBluetooth call and spawns no `Task` itself — every `Task` and CoreBluetooth call
+stays on the actor (see the Convention note below for why).
 ```swift
 private let centralQueue = DispatchQueue(label: "com.iotlink.bluetooth.central", qos: .userInitiated)
 private let proxy = CentralDelegateProxy()
@@ -179,7 +187,7 @@ func observeTelemetry() {
 }
 ```
 
-> **Convention:** shared, thread-agnostic helpers (e.g. `Optional`/`Sequence` extensions, `trace`, the `UserDefaults` wrappers) are explicitly marked `nonisolated` so they remain callable from any isolation domain rather than being inferred `@MainActor`.
+> **Convention:** shared, thread-agnostic helpers (e.g. `Optional`/`Sequence` extensions, `trace`, the `UserDefaults` wrappers) are explicitly marked `nonisolated` so they remain callable from any isolation domain rather than being inferred `@MainActor`. The same rule applies to `DefaultBluetoothCentralService`'s extracted collaborators (`ReconnectionCoordinator`, `ProvisioningCoordinator`, `PeripheralDiscoveryStore`): without the annotation each would be inferred `@MainActor`, and every call from the (non-`@MainActor`) service actor would need an `await` hop. None of the three spawns its own `Task` for the same underlying reason — a `Task` created inside a `nonisolated` type does not inherit the parent actor's isolation, so all scheduling and CoreBluetooth I/O stays on the actor itself.
 
 ---
 
@@ -289,7 +297,7 @@ nonisolated struct ReconnectionPolicy: Sendable {
 
 ## 🧪 Testing Strategy
 
-The unit suite (`iot-linkTests`, Swift Testing — `@Suite`/`@Test`/`#expect`) pins the pure logic shipped across Milestones 1–6: 10 suites, 67 test cases, fully deterministic, no BLE radio or UI required.
+The unit suite (`iot-linkTests`, Swift Testing — `@Suite`/`@Test`/`#expect`) pins the pure logic shipped across Milestones 1–6 plus the `BluetoothCentralService/` collaborator decomposition: 13 suites, 53 test cases, fully deterministic, no BLE radio or UI required.
 
 ### Determinism Hooks
 Two production seams exist specifically so tests can remove nondeterminism:
@@ -309,6 +317,9 @@ Because the simulator's `WiFiCredentials`/`TelemetryReading`/`LEDState`/`Provisi
 | `ControlCodecTests` | `LEDState` 1-byte codec, `ProvisioningStatus` raw bytes `0x00`–`0x03` |
 | `WireContractRoundTripTests` | Central ⇄ simulator byte-level agreement |
 | `ReconnectionPolicyTests` | `baseDelay × 2ⁿ + jitter` curve, negative-attempt clamp, budget boundary |
+| `ReconnectionCoordinatorTests` | Attempt-budget bookkeeping over the policy curve, non-mutating peek, reset on established connection |
+| `ProvisioningCoordinatorTests` | Resume-exactly-once continuation handling, success/failure propagation, spurious-call no-op |
+| `PeripheralDiscoveryStoreTests` | RSSI exponential-moving-average smoothing, staleness pruning, first-sighting name capture |
 | `AccountServiceTests` / `UserDefaultsExtensionsTests` | Onboarding persistence, typed get/set/remove |
 | `HomeModelBuilderTests` | Exhaustive 13-case `BluetoothState → Phase` table (`makePhase` uses `default:`, so new cases must be added to the table by hand) |
 | `ValueHelpersTests` | The `nonisolated` shared helpers used across isolation domains |
