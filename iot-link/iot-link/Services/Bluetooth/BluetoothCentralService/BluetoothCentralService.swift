@@ -68,10 +68,13 @@ actor DefaultBluetoothCentralService: BluetoothCentralService {
     /// CoreBluetooth does not deallocate it mid-connection.
     private var activePeripheral: CBPeripheral?
     
-    /// Peripherals seen during the current scan, keyed by identifier, with their most
-    /// recent RSSI (refreshed on every advertisement while duplicate callbacks are on) and
-    /// the time of the last advertisement, used to prune devices that go out of range.
-    private var discoveredPeripherals: [UUID: (peripheral: CBPeripheral, rssi: Int, lastSeen: Date)] = [:]
+    /// RSSI-smoothed, staleness-pruned bookkeeping for peripherals seen during the current
+    /// scan. Keyed by `UUID`; `peripheralsByID` below holds the matching `CBPeripheral`.
+    private var discoveryStore = PeripheralDiscoveryStore()
+    
+    /// The `CBPeripheral` for each id currently in `discoveryStore`, needed for
+    /// `connect(to:)`. Pruned in lockstep with `discoveryStore` (see `pruneStalePeripherals`).
+    private var peripheralsByID: [UUID: CBPeripheral] = [:]
     
     /// Background task that periodically drops peripherals which have stopped advertising.
     private var pruneTask: Task<Void, Never>?
@@ -86,15 +89,6 @@ actor DefaultBluetoothCentralService: BluetoothCentralService {
     
     /// How long to wait for the provisioning handshake before giving up.
     private let provisioningTimeout: Duration = .seconds(10)
-    
-    /// Exponential-moving-average weight for smoothing noisy RSSI readings. Higher values
-    /// track movement faster; lower values are steadier. `0.3` favours stability so the
-    /// signal indicator doesn't flicker between tiers when the device is stationary.
-    private let rssiSmoothingFactor = 0.3
-    
-    /// A peripheral that hasn't advertised within this window is considered out of range
-    /// and removed from the discovered list (CoreBluetooth has no "device lost" callback).
-    private let peripheralStaleInterval: TimeInterval = 5
     
     /// How often the prune task checks for stale peripherals.
     private let pruneInterval: Duration = .seconds(1)
@@ -157,7 +151,8 @@ actor DefaultBluetoothCentralService: BluetoothCentralService {
             trace("ignored - central not powered on (state: \(stateSubject.value))")
             return
         }
-        discoveredPeripherals.removeAll()
+        discoveryStore.removeAll()
+        peripheralsByID.removeAll()
         peripheralsSubject.send([])
         stateSubject.send(.scanning)
         // Allow duplicate callbacks so RSSI refreshes on every advertisement packet
@@ -178,7 +173,7 @@ actor DefaultBluetoothCentralService: BluetoothCentralService {
     }
     
     func connect(to id: UUID) {
-        guard let peripheral = discoveredPeripherals[id]?.peripheral else {
+        guard let peripheral = peripheralsByID[id] else {
             trace("no discovered peripheral for id <\(id)>")
             return
         }
@@ -324,38 +319,23 @@ private extension DefaultBluetoothCentralService {
     }
     
     func handleDiscover(_ peripheral: CBPeripheral, rssi: Int) {
-        // Smooth the raw reading with an exponential moving average to keep the signal
-        // indicator from flickering between tiers on RSSI noise. The first sighting seeds
-        // the average; later ones blend toward the new value.
-        let smoothed: Int
-        if let previous = discoveredPeripherals[peripheral.identifier]?.rssi {
-            smoothed = Int((rssiSmoothingFactor * Double(rssi)
-                            + (1 - rssiSmoothingFactor) * Double(previous)).rounded())
-        } else {
-            smoothed = rssi
-        }
-        discoveredPeripherals[peripheral.identifier] = (peripheral, smoothed, Date())
-        
+        peripheralsByID[peripheral.identifier] = peripheral
+        discoveryStore.recordSighting(id: peripheral.identifier, name: peripheral.name, rssi: rssi)
         publishDiscoveredPeripherals()
     }
     
-    /// Maps the current store to the public model and emits it.
+    /// Emits the store's current public model.
     func publishDiscoveredPeripherals() {
-        let discovered = discoveredPeripherals.values
-            .map { DiscoveredPeripheral(id: $0.peripheral.identifier, name: $0.peripheral.name, rssi: $0.rssi) }
-            .unique(by: \.id)
-        
-        peripheralsSubject.send(discovered)
+        peripheralsSubject.send(discoveryStore.discovered)
     }
     
-    /// Removes peripherals that haven't advertised within `peripheralStaleInterval`, so a
-    /// device that is powered off or moves out of range disappears from the list.
+    /// Removes peripherals that haven't advertised recently, so a device that is powered
+    /// off or moves out of range disappears from the list. Keeps `peripheralsByID` in sync
+    /// with `discoveryStore` by pruning the same ids.
     func pruneStalePeripherals() {
-        let cutoff = Date().addingTimeInterval(-peripheralStaleInterval)
-        let staleIDs = discoveredPeripherals.filter { $0.value.lastSeen < cutoff }.map(\.key)
-        
+        let staleIDs = discoveryStore.removeStale()
         guard staleIDs.isNotEmpty else { return }
-        staleIDs.forEach { discoveredPeripherals.removeValue(forKey: $0) }
+        staleIDs.forEach { peripheralsByID.removeValue(forKey: $0) }
         publishDiscoveredPeripherals()
     }
     
