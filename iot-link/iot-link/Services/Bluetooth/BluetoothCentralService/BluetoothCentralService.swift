@@ -99,15 +99,12 @@ actor DefaultBluetoothCentralService: BluetoothCentralService {
     /// How often the prune task checks for stale peripherals.
     private let pruneInterval: Duration = .seconds(1)
     
-    /// Back-off schedule for recovering an unexpectedly dropped link.
-    private let reconnectionPolicy: ReconnectionPolicy
-    
     /// Set when the user (or a flow) tears down the connection deliberately, so an ensuing
     /// disconnect callback does not trigger the reconnection loop.
     private var intentionalDisconnect = false
     
-    /// Zero-based index of the current reconnection attempt; reset on a successful connect.
-    private var reconnectAttempt = 0
+    /// Tracks the reconnection attempt budget against its injected `ReconnectionPolicy`.
+    private var reconnection: ReconnectionCoordinator
     
     /// In-flight back-off task awaiting the next reconnection attempt.
     private var reconnectTask: Task<Void, Never>?
@@ -148,7 +145,7 @@ actor DefaultBluetoothCentralService: BluetoothCentralService {
     }
     
     init(reconnectionPolicy: ReconnectionPolicy = ReconnectionPolicy()) {
-        self.reconnectionPolicy = reconnectionPolicy
+        self.reconnection = ReconnectionCoordinator(policy: reconnectionPolicy)
         centralManager = CBCentralManager(delegate: proxy, queue: centralQueue)
         wireProxy()
     }
@@ -187,7 +184,7 @@ actor DefaultBluetoothCentralService: BluetoothCentralService {
         }
         // Fresh user-initiated connection: clear any prior reconnection state.
         cancelReconnect()
-        reconnectAttempt = 0
+        reconnection.recordConnectionEstablished()
         intentionalDisconnect = false
         
         centralManager.stopScan()
@@ -410,7 +407,7 @@ private extension DefaultBluetoothCentralService {
         
         // A fully established link resets the reconnection budget (whether this was a first
         // connection or a successful recovery).
-        reconnectAttempt = 0
+        reconnection.recordConnectionEstablished()
         intentionalDisconnect = false
         
         stateSubject.send(.connected)
@@ -463,7 +460,7 @@ private extension DefaultBluetoothCentralService {
     func handleConnectionFailure() {
         finishProvisioning(with: .failure(ProvisioningError.notReady))
         
-        if reconnectAttempt > 0 {
+        if reconnection.isInReconnectionCycle() {
             scheduleReconnect()
         } else {
             handleDisconnect()
@@ -473,7 +470,7 @@ private extension DefaultBluetoothCentralService {
     /// Terminal teardown: clear all connection state and publish `.disconnected`.
     func handleDisconnect() {
         cancelReconnect()
-        reconnectAttempt = 0
+        reconnection.recordConnectionEstablished()
         intentionalDisconnect = false
         activePeripheral = nil
         characteristics.removeAll()
@@ -495,7 +492,7 @@ private extension DefaultBluetoothCentralService {
         cancelConnectTimeout()
         
         guard let peripheral = activePeripheral,
-              reconnectionPolicy.allowsAttempt(reconnectAttempt) else {
+              let delay = reconnection.delayForNextAttempt() else {
             handleDisconnect()
             return
         }
@@ -507,7 +504,6 @@ private extension DefaultBluetoothCentralService {
         ledStateSubject.send(nil)
         stateSubject.send(.reconnecting)
         
-        let delay = reconnectionPolicy.delay(forAttempt: reconnectAttempt)
         reconnectTask = Task { [weak self] in
             try? await Task.sleep(for: delay)
             guard Task.isCancelled.isFalse else { return }
@@ -516,7 +512,7 @@ private extension DefaultBluetoothCentralService {
     }
     
     func attemptReconnect(_ peripheral: CBPeripheral) {
-        reconnectAttempt += 1
+        reconnection.recordAttemptStarted()
         centralManager.connect(peripheral)
         startConnectTimeout(for: peripheral)
     }
