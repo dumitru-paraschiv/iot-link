@@ -80,9 +80,9 @@ actor DefaultBluetoothCentralService: BluetoothCentralService {
     /// milestones for telemetry/LED/provisioning I/O.
     private var characteristics: [CBUUID: CBCharacteristic] = [:]
     
-    /// Continuation for the in-flight `provision(_:)` call, resumed by the provisioning
-    /// characteristic's status notification or the timeout. `nil` when idle.
-    private var provisioningContinuation: CheckedContinuation<ProvisioningStatus, Error>?
+    /// Owns the in-flight `provision(_:)` continuation, resumed by the provisioning
+    /// characteristic's status notification or the timeout.
+    private var provisioning = ProvisioningCoordinator()
     
     /// How long to wait for the provisioning handshake before giving up.
     private let provisioningTimeout: Duration = .seconds(10)
@@ -218,7 +218,7 @@ actor DefaultBluetoothCentralService: BluetoothCentralService {
               let characteristic = characteristics[GATTProfile.Characteristic.provisioning] else {
             throw ProvisioningError.notReady
         }
-        guard provisioningContinuation == nil else {
+        guard provisioning.isInFlight.isFalse else {
             throw ProvisioningError.notReady
         }
         guard let packet = credentials.serialize() else {
@@ -227,11 +227,8 @@ actor DefaultBluetoothCentralService: BluetoothCentralService {
         
         stateSubject.send(.provisioning)
         
-        // Suspend until the peripheral's status notification (or the timeout) resumes us.
-        // The write is issued from inside the continuation body so a synchronously-delivered
-        // ack can never race ahead of the continuation being stored.
         let status = try await withCheckedThrowingContinuation { continuation in
-            provisioningContinuation = continuation
+            provisioning.begin(continuation)
             peripheral.writeValue(packet, for: characteristic, type: .withResponse)
             startProvisioningTimeout()
         }
@@ -549,13 +546,8 @@ private extension DefaultBluetoothCentralService {
 
 private extension DefaultBluetoothCentralService {
     
-    /// Resumes the in-flight provisioning continuation exactly once, then clears it.
-    /// Safe to call spuriously — a `nil` continuation is a no-op, which is what guards
-    /// against a double-resume when a late notification and the timeout race.
     func finishProvisioning(with result: Result<ProvisioningStatus, Error>) {
-        guard let continuation = provisioningContinuation else { return }
-        provisioningContinuation = nil
-        continuation.resume(with: result)
+        provisioning.finish(with: result)
     }
     
     func startProvisioningTimeout() {
