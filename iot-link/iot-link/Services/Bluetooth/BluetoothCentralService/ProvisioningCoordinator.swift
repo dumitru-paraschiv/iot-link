@@ -22,6 +22,12 @@ nonisolated struct ProvisioningCoordinator: Sendable {
         continuation != nil
     }
     
+    /// Whether the currently connected device has completed a successful provisioning
+    /// handshake this session. Persists across a reconnect of the same link so the actor
+    /// can re-enter `.provisioned` instead of `.connected` on rediscovery; cleared on a
+    /// terminal disconnect so a fresh connection to a different device starts unprovisioned.
+    private(set) var isProvisioned = false
+    
     /// Registers the continuation to resume when the handshake concludes.
     mutating func begin(_ continuation: CheckedContinuation<ProvisioningStatus, Error>) {
         self.continuation = continuation
@@ -37,5 +43,15 @@ nonisolated struct ProvisioningCoordinator: Sendable {
         self.continuation = nil
         continuation.resume(with: result)
         return true
+    }
+    
+    /// Marks the current connection as having completed the `0x00` handshake.
+    mutating func markProvisioned() {
+        isProvisioned = true
+    }
+    
+    /// Clears the provisioned flag on a terminal disconnect.
+    mutating func markUnprovisioned() {
+        isProvisioned = false
     }
 }

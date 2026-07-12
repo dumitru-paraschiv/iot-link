@@ -228,6 +228,9 @@ actor DefaultBluetoothCentralService: BluetoothCentralService {
             startProvisioningTimeout()
         }
         
+        if status == .success {
+            provisioning.markProvisioned()
+        }
         stateSubject.send(status == .success ? .provisioned : .connected)
         return status
     }
@@ -387,7 +390,10 @@ private extension DefaultBluetoothCentralService {
         reconnection.recordConnectionEstablished()
         intentionalDisconnect = false
         
-        stateSubject.send(.connected)
+        // A reconnect of a device that was already provisioned this session re-enters
+        // `.provisioned` directly; a first-time connection (or a different device) starts
+        // at `.connected` until the Wi-Fi handshake actually completes.
+        stateSubject.send(provisioning.isProvisioned ? .provisioned : .connected)
     }
     
     func handleWriteValue(_ characteristic: CBCharacteristic, error: Error?) {
@@ -449,6 +455,7 @@ private extension DefaultBluetoothCentralService {
         cancelReconnect()
         reconnection.recordConnectionEstablished()
         intentionalDisconnect = false
+        provisioning.markUnprovisioned()
         activePeripheral = nil
         characteristics.removeAll()
         connectedDeviceSubject.send(nil)
