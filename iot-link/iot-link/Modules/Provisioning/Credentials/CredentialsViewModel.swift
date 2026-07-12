@@ -33,6 +33,7 @@ final class CredentialsViewModel {
         case let .passwordChanged(password): model.accept(password: password)
         case .togglePasswordReveal: model.accept(isPasswordRevealed: model.isPasswordRevealed.isFalse)
         case .submitTapped: handleSubmit()
+        case .cancelTapped: output?.steps.send(.cancelled)
         }
     }
 }

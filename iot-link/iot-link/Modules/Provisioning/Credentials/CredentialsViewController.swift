@@ -26,6 +26,16 @@ final class CredentialsViewController: BaseHostingController<CredentialsViewUI>,
     override func setupNavigation() {
         super.setupNavigation()
         navigationItem.title = "Wi-Fi Setup"
+        navigationItem.rightBarButtonItem = UIBarButtonItem(
+            title: "Cancel",
+            style: .plain,
+            target: self,
+            action: #selector(handleCancelTapped)
+        )
+    }
+    
+    @objc private func handleCancelTapped() {
+        viewModel.send(.cancelTapped)
     }
 }
 

@@ -41,7 +41,13 @@ private extension DefaultSettingsFlow {
             }
         }
         .store(in: &provisioningFlow.stepsBag)
-        present(provisioningFlow)
+        // Strong capture: this closure is the only path to `handleInteractiveDismiss()`
+        // for an interactive swipe-dismiss, and `BaseFlow` always calls `removeChild`
+        // (dropping `childFlows`' strong reference, the only other owner) immediately
+        // before invoking this closure — a weak capture here would already be nil.
+        present(provisioningFlow, dismissCompletion: { [provisioningFlow] in
+            provisioningFlow.handleInteractiveDismiss()
+        })
     }
     
     func showSettingsView(with model: SettingsModel) {

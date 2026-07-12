@@ -22,7 +22,7 @@ struct HomeModelBuilderTests {
         (.connecting, nil),
         (.discoveringServices, nil),
         (.discoveringCharacteristics, nil),
-        (.connected, .dashboard),
+        (.connected, nil),
         (.provisioning, nil),
         (.provisioned, .dashboard),
         (.reconnecting, .reconnecting),

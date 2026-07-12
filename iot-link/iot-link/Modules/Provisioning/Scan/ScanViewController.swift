@@ -31,6 +31,16 @@ final class ScanViewController: BaseHostingController<ScanViewUI>, ScanView {
     override func setupNavigation() {
         super.setupNavigation()
         navigationItem.title = "Add Device"
+        navigationItem.rightBarButtonItem = UIBarButtonItem(
+            title: "Cancel",
+            style: .plain,
+            target: self,
+            action: #selector(handleCancelTapped)
+        )
+    }
+    
+    @objc private func handleCancelTapped() {
+        viewModel.send(.cancelTapped)
     }
 }
 
