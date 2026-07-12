@@ -65,7 +65,7 @@ The application's navigation is divided into clear, single-responsibility coordi
 
 ### 4. HomeFlow & Telemetry Dashboard
 * **Purpose**: Coordinates the telemetry dashboard view (`HomeViewController`).
-* **Logic**: `HomeViewModel` observes the service's connection state and derives a phase — **empty** (no device: prompt + "Add Device"; also the landing state after a clean disconnect or an exhausted reconnection budget), **dashboard** (connected: device header, live temperature/humidity gauges, LED toggle, Disconnect), or **reconnecting** (dropped link: dimmed dashboard with a spinner "Reconnecting…" banner while the service runs its back-off loop). It subscribes to the telemetry, LED, and connected-device publishers to render live data, and toggles the LED optimistically (reconciled by the control characteristic's notification).
+* **Logic**: `HomeViewModel` observes the service's connection state and derives a phase — **empty** (no device: prompt + "Add Device"; also the landing state after a clean disconnect or an exhausted reconnection budget), **dashboard** (provisioned: device header, live temperature/humidity gauges, LED toggle, Disconnect — reached only once the Wi-Fi handshake completes; a bare BLE `.connected` link that hasn't been provisioned yet does not advance the phase), or **reconnecting** (dropped link: dimmed dashboard with a spinner "Reconnecting…" banner while the service runs its back-off loop). It subscribes to the telemetry, LED, and connected-device publishers to render live data, and toggles the LED optimistically (reconciled by the control characteristic's notification).
 * **Triggers**: "Add Device" launches `ProvisioningFlow` in `.scan` mode; the dashboard's "Set Up Wi-Fi" launches it in `.credentials` mode (skips discovery for the already-connected device).
 
 ### 5. ProvisioningFlow (BLE Device Setup)
@@ -75,7 +75,7 @@ The application's navigation is divided into clear, single-responsibility coordi
   1. **Scan** — shows peripherals advertising the custom service UUID as a live list, sorted by a 3-tier RSSI signal bucket (EMA-smoothed; devices that stop advertising are pruned). Tapping a device connects and discovers characteristics.
   2. **Credentials** — on reaching `.connected`, pushes the Wi-Fi form. Live validation against the spec byte bounds gates submission; on submit the ViewModel calls `bluetoothService.provision(_:)`.
   3. **Result** — pushes a success or typed-failure screen from the handshake outcome. Success auto-dismisses the flow after ~1.5 s (keeping the connection for the dashboard); failure offers a recovery-aware "Try Again" — re-enter credentials if the device is still connected, or re-scan if it is gone.
-* **Cleanup**: Cancelling or a lost-device failure calls `bluetoothService.disconnect()`; a successful provision keeps the connection for the telemetry dashboard (Milestone 5).
+* **Cleanup**: An explicit Cancel action (on both the Scan and Credentials screens) or a lost-device failure calls `bluetoothService.disconnect()` in `.scan` mode; a successful provision keeps the connection for the telemetry dashboard (Milestone 5). Abandoning the sheet via the interactive swipe-dismiss gesture is wired to the same teardown (`ProvisioningFlow.handleInteractiveDismiss()`), so it can no longer leave a live, unprovisioned BLE link behind.
 
 ---
 
@@ -262,6 +262,8 @@ stateDiagram-v2
     Provisioned --> Disconnected : User Disconnect
     Connecting --> Disconnected : Initial Connection Failed
 ```
+
+**Reconnecting an already-provisioned device**: `Reconnecting → DiscoveringServices → DiscoveringCharacteristics` is the same rediscovery path taken on a first connection, but if the link was already provisioned earlier this session, the service re-enters `Provisioned` directly instead of stopping at `Connected` — tracked by `ProvisioningCoordinator.isProvisioned`, set on a successful `0x00` handshake and cleared on a terminal disconnect.
 
 ### 📉 Exponential Reconnection Back-Off Resiliency
 When a peripheral disconnects unexpectedly, the service runs an automated exponential back-off reconnection loop. This prevents spamming the radio and draining battery resources on both the iOS device and the peripheral.
