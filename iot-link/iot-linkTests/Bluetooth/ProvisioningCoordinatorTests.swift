@@ -57,4 +57,25 @@ struct ProvisioningCoordinatorTests {
             Issue.record("unexpected error: \(error)")
         }
     }
+
+    @Test("isProvisioned defaults to false")
+    func isProvisionedDefaultsFalse() {
+        let coordinator = ProvisioningCoordinator()
+        #expect(coordinator.isProvisioned == false)
+    }
+
+    @Test("markProvisioned sets isProvisioned")
+    func markProvisionedSetsFlag() {
+        var coordinator = ProvisioningCoordinator()
+        coordinator.markProvisioned()
+        #expect(coordinator.isProvisioned)
+    }
+
+    @Test("markUnprovisioned clears isProvisioned")
+    func markUnprovisionedClearsFlag() {
+        var coordinator = ProvisioningCoordinator()
+        coordinator.markProvisioned()
+        coordinator.markUnprovisioned()
+        #expect(coordinator.isProvisioned == false)
+    }
 }
