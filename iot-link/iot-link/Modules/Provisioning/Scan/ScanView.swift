@@ -25,6 +25,7 @@ enum ScanViewAction {
     case viewWillAppear
     case viewWillDisappear
     case deviceTapped(id: UUID)
+    case cancelTapped
 }
 
 protocol ScanViewInput {

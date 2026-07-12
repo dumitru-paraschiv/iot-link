@@ -31,6 +31,7 @@ final class ScanViewModel {
         case .viewWillAppear: handleViewWillAppear()
         case .viewWillDisappear: handleViewWillDisappear()
         case let .deviceTapped(id): handleDeviceTapped(id: id)
+        case .cancelTapped: output?.steps.send(.cancelled)
         }
     }
 }
