@@ -12,7 +12,7 @@ This document defines the custom BLE GATT (Generic Attribute Profile) specificat
 | Characteristic | UUID | Properties | Payload Size | Description |
 | :--- | :--- | :--- | :--- | :--- |
 | **Provisioning Endpoint** | `E0C00002-C3B6-4B22-9F1C-123456789ABC` | Write (With Response), Notify | Variable (Max 128 Bytes) | Uploads local Wi-Fi credentials to the device. Notifies provisioning status. |
-| **Sensor Telemetry** | `E0C00003-C3B6-4B22-9F1C-123456789ABC` | Notify (Indicate) | 4 Bytes (Fixed) | Streams real-time Temperature & Humidity data. |
+| **Sensor Telemetry** | `E0C00003-C3B6-4B22-9F1C-123456789ABC` | Notify | 4 Bytes (Fixed) | Streams real-time Temperature & Humidity data. |
 | **Hardware Control** | `E0C00004-C3B6-4B22-9F1C-123456789ABC` | Read, WriteWithoutResponse, Notify | 1 Byte | Controls and monitors the simulated status LED. Notifies on any state change. |
 
 ---

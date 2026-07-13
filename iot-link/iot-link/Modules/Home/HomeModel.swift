@@ -68,8 +68,8 @@ enum HomeModelBuilder {
     
     static func makePhase(from state: BluetoothState) -> HomeModel.Phase? {
         switch state {
-        // `.connected` alone (BLE link up, Wi-Fi not yet provisioned) falls through to
-        // `default: nil` below — the dashboard only appears once `.provisioned` arrives.
+        // `.connected` alone (BLE link up, Wi-Fi not yet provisioned) maps to `nil`
+        // below — the dashboard only appears once `.provisioned` arrives.
         case .provisioned: .dashboard
         case .reconnecting: .reconnecting
         // A clean disconnect — user Disconnect, provisioning cancel, or reconnection
