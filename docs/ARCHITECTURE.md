@@ -56,7 +56,7 @@ The application's navigation is divided into clear, single-responsibility coordi
 * **Logic**: Checks `accountService.isAppOnboarded`. If false, displays `OnboardingFlow`. Once completed (or if true initially), displays `MainFlow`.
 
 ### 2. OnboardingFlow (Welcome Walkthrough)
-* **Purpose**: Presents the user with the app's features and request permissions (e.g. system notifications, Bluetooth access permissions).
+* **Purpose**: Presents the user with the app's features. It requests no permissions — the system Bluetooth prompt is triggered later, when the service first creates its `CBCentralManager`.
 * **BLE Mechanics**: Does **not** perform any BLE pairing or communication. 
 * **Completion**: Once the walkthrough slides are finished, calls `accountService.completeAppOnboarding()` and signals `finished` back to `AppFlow`.
 
@@ -81,7 +81,7 @@ The application's navigation is divided into clear, single-responsibility coordi
 
 ## 🧩 Module Pattern (Action-Driven MVVM)
 
-Each UI module (`Onboarding`, `Home`, `Settings`, …) follows a strict unidirectional data-flow contract built from four files: `*Model`, `*View` (protocols), `*ViewModel`, and `*ViewController` (which also hosts the SwiftUI `*ViewUI`).
+Each UI module (`Onboarding`, `Home`, `Settings`, …) follows a strict unidirectional data-flow contract built from four core files: `*Model`, `*View` (protocols), `*ViewModel`, and `*ViewController` (which also hosts the SwiftUI `*ViewUI`) — plus an optional `*ViewComponents` file for extracted SwiftUI subviews (Home and Onboarding have their own; the three Provisioning modules share `ProvisioningViewComponents.swift`).
 
 ### 1. View ↔ ViewModel Contract
 The View and ViewModel communicate only through `Input`/`Output` protocols — never by holding concrete references. The `ViewController` conforms to the `Output` side; the `ViewModel` conforms to the `Input` side and is bound via `bind(output:)`.
@@ -299,7 +299,7 @@ nonisolated struct ReconnectionPolicy: Sendable {
 
 ## 🧪 Testing Strategy
 
-The unit suite (`iot-linkTests`, Swift Testing — `@Suite`/`@Test`/`#expect`) pins the pure logic shipped across Milestones 1–6 plus the `BluetoothCentralService/` collaborator decomposition: 13 suites, 53 test cases, fully deterministic, no BLE radio or UI required.
+The unit suite (`iot-linkTests`, Swift Testing — `@Suite`/`@Test`/`#expect`) pins the pure logic shipped across Milestones 1–6 plus the `BluetoothCentralService/` collaborator decomposition: 13 suites, 56 test cases, fully deterministic, no BLE radio or UI required.
 
 ### Determinism Hooks
 Two production seams exist specifically so tests can remove nondeterminism:
@@ -323,5 +323,5 @@ Because the simulator's `WiFiCredentials`/`TelemetryReading`/`LEDState`/`Provisi
 | `ProvisioningCoordinatorTests` | Resume-exactly-once continuation handling, success/failure propagation, spurious-call no-op |
 | `PeripheralDiscoveryStoreTests` | RSSI exponential-moving-average smoothing, staleness pruning, first-sighting name capture |
 | `AccountServiceTests` / `UserDefaultsExtensionsTests` | Onboarding persistence, typed get/set/remove |
-| `HomeModelBuilderTests` | Exhaustive 13-case `BluetoothState → Phase` table (`makePhase` uses `default:`, so new cases must be added to the table by hand) |
+| `HomeModelBuilderTests` | Exhaustive 13-case `BluetoothState → Phase` table (`makePhase` switches exhaustively with no `default:`, so a new case is a compile error until mapped) |
 | `ValueHelpersTests` | The `nonisolated` shared helpers used across isolation domains |
