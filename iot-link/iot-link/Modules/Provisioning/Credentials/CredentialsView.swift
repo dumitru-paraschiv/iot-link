@@ -11,6 +11,7 @@ enum CredentialsViewSteps {
     
     case provisioned(ProvisioningStatus)
     case failed
+    case cancelled
 }
 
 protocol CredentialsViewOutput: AnyObject {
@@ -26,6 +27,7 @@ enum CredentialsViewAction {
     case passwordChanged(String)
     case togglePasswordReveal
     case submitTapped
+    case cancelTapped
 }
 
 protocol CredentialsViewInput {

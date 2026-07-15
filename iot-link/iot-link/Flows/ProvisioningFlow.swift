@@ -28,6 +28,12 @@ enum ProvisioningStartMode {
 protocol ProvisioningFlow: NavigationFlow {
     
     var steps: PassthroughSubject<ProvisioningFlowSteps, Never> { get }
+    
+    /// Called by the presenter when the sheet is dismissed via the interactive swipe
+    /// gesture rather than one of the flow's own finish paths (Cancel button, success, or
+    /// an unreachable-failure finish). A no-op if the flow already finished through one of
+    /// those paths.
+    func handleInteractiveDismiss()
 }
 
 final class DefaultProvisioningFlow: NavigationFlow, ProvisioningFlow, ModuleFactory {
@@ -36,6 +42,7 @@ final class DefaultProvisioningFlow: NavigationFlow, ProvisioningFlow, ModuleFac
     
     private let bluetoothService: BluetoothCentralService
     private let startMode: ProvisioningStartMode
+    private var hasFinished = false
     
     init(r: MainResolver,
          controller: UINavigationController,
@@ -52,6 +59,10 @@ final class DefaultProvisioningFlow: NavigationFlow, ProvisioningFlow, ModuleFac
         case .credentials: showCredentialsView(with: CredentialsModel(), asRoot: true)
         }
     }
+    
+    func handleInteractiveDismiss() {
+        cancel()
+    }
 }
 
 private extension DefaultProvisioningFlow {
@@ -66,6 +77,8 @@ private extension DefaultProvisioningFlow {
             case .failed:
                 let outcome = ResultModel.builder.makeUnreachableFailureOutcome()
                 self?.showResultView(with: ResultModel(outcome: outcome))
+            case .cancelled:
+                self?.cancel()
             }
         }
         .store(in: &view.stepsBag)
@@ -105,10 +118,15 @@ private extension DefaultProvisioningFlow {
 
 private extension DefaultProvisioningFlow {
     
-    /// User abandoned provisioning. In `.scan` mode this tears down the BLE connection
-    /// (they were still choosing a device); in `.credentials` mode the device is already
-    /// connected and in use by the dashboard, so the connection is kept.
+    /// User abandoned provisioning — via an explicit Cancel action or an interactive
+    /// swipe-dismiss (see `handleInteractiveDismiss()`). In `.scan` mode this tears down
+    /// the BLE connection (they were still choosing a device or setting it up); in
+    /// `.credentials` mode the device is already connected and in use by the dashboard, so
+    /// the connection is kept. Guarded by `hasFinished` so a swipe-dismiss that follows an
+    /// already-finished flow (Cancel button, success, or unreachable-failure finish) is a
+    /// no-op instead of double-tearing-down.
     func cancel() {
+        guard hasFinished.isFalse else { return }
         if startMode == .scan {
             Task { await bluetoothService.disconnect() }
         }
@@ -116,6 +134,7 @@ private extension DefaultProvisioningFlow {
     }
     
     func finish(provisioned: Bool) {
+        hasFinished = true
         steps.send(.finished(provisioned: provisioned))
     }
     

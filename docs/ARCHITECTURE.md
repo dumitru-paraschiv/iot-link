@@ -56,7 +56,7 @@ The application's navigation is divided into clear, single-responsibility coordi
 * **Logic**: Checks `accountService.isAppOnboarded`. If false, displays `OnboardingFlow`. Once completed (or if true initially), displays `MainFlow`.
 
 ### 2. OnboardingFlow (Welcome Walkthrough)
-* **Purpose**: Presents the user with the app's features and request permissions (e.g. system notifications, Bluetooth access permissions).
+* **Purpose**: Presents the user with the app's features. It requests no permissions — the system Bluetooth prompt is triggered later, when the service first creates its `CBCentralManager`.
 * **BLE Mechanics**: Does **not** perform any BLE pairing or communication. 
 * **Completion**: Once the walkthrough slides are finished, calls `accountService.completeAppOnboarding()` and signals `finished` back to `AppFlow`.
 
@@ -65,7 +65,7 @@ The application's navigation is divided into clear, single-responsibility coordi
 
 ### 4. HomeFlow & Telemetry Dashboard
 * **Purpose**: Coordinates the telemetry dashboard view (`HomeViewController`).
-* **Logic**: `HomeViewModel` observes the service's connection state and derives a phase — **empty** (no device: prompt + "Add Device"; also the landing state after a clean disconnect or an exhausted reconnection budget), **dashboard** (connected: device header, live temperature/humidity gauges, LED toggle, Disconnect), or **reconnecting** (dropped link: dimmed dashboard with a spinner "Reconnecting…" banner while the service runs its back-off loop). It subscribes to the telemetry, LED, and connected-device publishers to render live data, and toggles the LED optimistically (reconciled by the control characteristic's notification).
+* **Logic**: `HomeViewModel` observes the service's connection state and derives a phase — **empty** (no device: prompt + "Add Device"; also the landing state after a clean disconnect or an exhausted reconnection budget), **dashboard** (provisioned: device header, live temperature/humidity gauges, LED toggle, Disconnect — reached only once the Wi-Fi handshake completes; a bare BLE `.connected` link that hasn't been provisioned yet does not advance the phase), or **reconnecting** (dropped link: dimmed dashboard with a spinner "Reconnecting…" banner while the service runs its back-off loop). It subscribes to the telemetry, LED, and connected-device publishers to render live data, and toggles the LED optimistically (reconciled by the control characteristic's notification).
 * **Triggers**: "Add Device" launches `ProvisioningFlow` in `.scan` mode; the dashboard's "Set Up Wi-Fi" launches it in `.credentials` mode (skips discovery for the already-connected device).
 
 ### 5. ProvisioningFlow (BLE Device Setup)
@@ -75,13 +75,13 @@ The application's navigation is divided into clear, single-responsibility coordi
   1. **Scan** — shows peripherals advertising the custom service UUID as a live list, sorted by a 3-tier RSSI signal bucket (EMA-smoothed; devices that stop advertising are pruned). Tapping a device connects and discovers characteristics.
   2. **Credentials** — on reaching `.connected`, pushes the Wi-Fi form. Live validation against the spec byte bounds gates submission; on submit the ViewModel calls `bluetoothService.provision(_:)`.
   3. **Result** — pushes a success or typed-failure screen from the handshake outcome. Success auto-dismisses the flow after ~1.5 s (keeping the connection for the dashboard); failure offers a recovery-aware "Try Again" — re-enter credentials if the device is still connected, or re-scan if it is gone.
-* **Cleanup**: Cancelling or a lost-device failure calls `bluetoothService.disconnect()`; a successful provision keeps the connection for the telemetry dashboard (Milestone 5).
+* **Cleanup**: An explicit Cancel action (on both the Scan and Credentials screens) or a lost-device failure calls `bluetoothService.disconnect()` in `.scan` mode; a successful provision keeps the connection for the telemetry dashboard (Milestone 5). Abandoning the sheet via the interactive swipe-dismiss gesture is wired to the same teardown (`ProvisioningFlow.handleInteractiveDismiss()`), so it can no longer leave a live, unprovisioned BLE link behind.
 
 ---
 
 ## 🧩 Module Pattern (Action-Driven MVVM)
 
-Each UI module (`Onboarding`, `Home`, `Settings`, …) follows a strict unidirectional data-flow contract built from four files: `*Model`, `*View` (protocols), `*ViewModel`, and `*ViewController` (which also hosts the SwiftUI `*ViewUI`).
+Each UI module (`Onboarding`, `Home`, `Settings`, …) follows a strict unidirectional data-flow contract built from four core files: `*Model`, `*View` (protocols), `*ViewModel`, and `*ViewController` (which also hosts the SwiftUI `*ViewUI`) — plus an optional `*ViewComponents` file for extracted SwiftUI subviews (Home and Onboarding have their own; the three Provisioning modules share `ProvisioningViewComponents.swift`).
 
 ### 1. View ↔ ViewModel Contract
 The View and ViewModel communicate only through `Input`/`Output` protocols — never by holding concrete references. The `ViewController` conforms to the `Output` side; the `ViewModel` conforms to the `Input` side and is bound via `bind(output:)`.
@@ -137,7 +137,15 @@ Both Views and Flows expose a Combine `PassthroughSubject` named `steps`. A View
 `CoreBluetooth` is notorious for blocking UI drawing thread cycles if callbacks execute on the Main Queue. Compounding this, the project builds with `-default-isolation=MainActor` (Swift's approachable-concurrency mode), so any unannotated type is inferred `@MainActor` — which collides with CoreBluetooth's background delegate callbacks. The `BluetoothCentralService` resolves both with an **actor + delegate-proxy** design.
 
 ### 1. Actor-Owned Central
-`DefaultBluetoothCentralService` is an `actor` that owns the `CBCentralManager`, the connection state machine, the discovered-peripheral map, and the cached characteristics. All CoreBluetooth *calls* (`scanForPeripherals`, `connect`, `discoverServices`, …) are made from actor-isolated methods, and the manager runs on a dedicated background queue.
+`DefaultBluetoothCentralService` is an `actor` that owns the `CBCentralManager`, the connection state machine, and the cached characteristics. All CoreBluetooth *calls* (`scanForPeripherals`, `connect`, `discoverServices`, …) are made from actor-isolated methods, and the manager runs on a dedicated background queue.
+
+Three stateful subsystems — reconnection back-off, the provisioning handshake, and
+discovered-peripheral bookkeeping — are factored out into `ReconnectionCoordinator`,
+`ProvisioningCoordinator`, and `PeripheralDiscoveryStore` (`Services/Bluetooth/
+BluetoothCentralService/`). Each is a `nonisolated`, synchronous, `Sendable` value type: it
+holds state and answers decisions ("what's the next delay", "resume this handshake") but
+makes no CoreBluetooth call and spawns no `Task` itself — every `Task` and CoreBluetooth call
+stays on the actor (see the Convention note below for why).
 ```swift
 private let centralQueue = DispatchQueue(label: "com.iotlink.bluetooth.central", qos: .userInitiated)
 private let proxy = CentralDelegateProxy()
@@ -179,7 +187,7 @@ func observeTelemetry() {
 }
 ```
 
-> **Convention:** shared, thread-agnostic helpers (e.g. `Optional`/`Sequence` extensions, `trace`, the `UserDefaults` wrappers) are explicitly marked `nonisolated` so they remain callable from any isolation domain rather than being inferred `@MainActor`.
+> **Convention:** shared, thread-agnostic helpers (e.g. `Optional`/`Sequence` extensions, `trace`, the `UserDefaults` wrappers) are explicitly marked `nonisolated` so they remain callable from any isolation domain rather than being inferred `@MainActor`. The same rule applies to `DefaultBluetoothCentralService`'s extracted collaborators (`ReconnectionCoordinator`, `ProvisioningCoordinator`, `PeripheralDiscoveryStore`): without the annotation each would be inferred `@MainActor`, and every call from the (non-`@MainActor`) service actor would need an `await` hop. None of the three spawns its own `Task` for the same underlying reason — a `Task` created inside a `nonisolated` type does not inherit the parent actor's isolation, so all scheduling and CoreBluetooth I/O stays on the actor itself.
 
 ---
 
@@ -255,6 +263,8 @@ stateDiagram-v2
     Connecting --> Disconnected : Initial Connection Failed
 ```
 
+**Reconnecting an already-provisioned device**: `Reconnecting → DiscoveringServices → DiscoveringCharacteristics` is the same rediscovery path taken on a first connection, but if the link was already provisioned earlier this session, the service re-enters `Provisioned` directly instead of stopping at `Connected` — tracked by `ProvisioningCoordinator.isProvisioned`, set on a successful `0x00` handshake and cleared on a terminal disconnect.
+
 ### 📉 Exponential Reconnection Back-Off Resiliency
 When a peripheral disconnects unexpectedly, the service runs an automated exponential back-off reconnection loop. This prevents spamming the radio and draining battery resources on both the iOS device and the peripheral.
 
@@ -289,7 +299,7 @@ nonisolated struct ReconnectionPolicy: Sendable {
 
 ## 🧪 Testing Strategy
 
-The unit suite (`iot-linkTests`, Swift Testing — `@Suite`/`@Test`/`#expect`) pins the pure logic shipped across Milestones 1–6: 10 suites, 67 test cases, fully deterministic, no BLE radio or UI required.
+The unit suite (`iot-linkTests`, Swift Testing — `@Suite`/`@Test`/`#expect`) pins the pure logic shipped across Milestones 1–6 plus the `BluetoothCentralService/` collaborator decomposition: 13 suites, 56 test cases, fully deterministic, no BLE radio or UI required.
 
 ### Determinism Hooks
 Two production seams exist specifically so tests can remove nondeterminism:
@@ -309,6 +319,9 @@ Because the simulator's `WiFiCredentials`/`TelemetryReading`/`LEDState`/`Provisi
 | `ControlCodecTests` | `LEDState` 1-byte codec, `ProvisioningStatus` raw bytes `0x00`–`0x03` |
 | `WireContractRoundTripTests` | Central ⇄ simulator byte-level agreement |
 | `ReconnectionPolicyTests` | `baseDelay × 2ⁿ + jitter` curve, negative-attempt clamp, budget boundary |
+| `ReconnectionCoordinatorTests` | Attempt-budget bookkeeping over the policy curve, non-mutating peek, reset on established connection |
+| `ProvisioningCoordinatorTests` | Resume-exactly-once continuation handling, success/failure propagation, spurious-call no-op |
+| `PeripheralDiscoveryStoreTests` | RSSI exponential-moving-average smoothing, staleness pruning, first-sighting name capture |
 | `AccountServiceTests` / `UserDefaultsExtensionsTests` | Onboarding persistence, typed get/set/remove |
-| `HomeModelBuilderTests` | Exhaustive 13-case `BluetoothState → Phase` table (`makePhase` uses `default:`, so new cases must be added to the table by hand) |
+| `HomeModelBuilderTests` | Exhaustive 13-case `BluetoothState → Phase` table (`makePhase` switches exhaustively with no `default:`, so a new case is a compile error until mapped) |
 | `ValueHelpersTests` | The `nonisolated` shared helpers used across isolation domains |
