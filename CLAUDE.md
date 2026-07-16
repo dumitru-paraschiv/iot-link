@@ -66,7 +66,8 @@ Swift Testing (`@Suite`/`@Test`/`#expect`) in `iot-linkTests`, fully determinist
 - `docs/ARCHITECTURE.md` — concurrency, state machine, DI, module pattern, testing strategy (all with code snippets).
 - `docs/GATT_SPEC.md` — GATT characteristics, byte layouts, Swift serialization reference.
 - `docs/IMPLEMENTATION_PLAN.md` — **historical only**, documents the original v1.0.0 milestones (1-7); frozen as of the v1.0.0 release and not updated for later work.
-- `CHANGELOG.md` — Keep a Changelog format; all post-1.0.0 work is recorded under `[Unreleased]` here, not in the implementation plan.
+- `docs/IMPLEMENTATION_PLAN_1.0.2.md` — the active milestone plan (Milestones 8+), continuing the numbering from the frozen v1.0.0 plan. Will itself be frozen once v1.0.2 ships; the next version's work gets its own `IMPLEMENTATION_PLAN_<version>.md` rather than reopening this one.
+- `CHANGELOG.md` — Keep a Changelog format; every post-1.0.0 branch gets an `[Unreleased]` entry here too, alongside (not instead of) its milestone-plan entry.
 
 ## Git workflow
 
