@@ -56,7 +56,8 @@ iot-link/
 ├── docs/
 │   ├── GATT_SPEC.md               # Custom GATT specifications and byte layouts
 │   ├── ARCHITECTURE.md            # Concurrency, state machine, and reconnection logic
-│   └── IMPLEMENTATION_PLAN.md     # Git-driven milestone plan and per-milestone status
+│   ├── IMPLEMENTATION_PLAN.md     # Git-driven milestone plan and per-milestone status (v1.0.0, frozen)
+│   └── IMPLEMENTATION_PLAN_1.0.2.md # v1.0.2 milestone plan, continuing the M1-7 numbering
 └── iot-link/                      # Main Xcode Workspace
     ├── iot-link/                  # iOS App Source Target
     │   ├── Core/                  # App Entry Point, Delegates (App, Scene)
