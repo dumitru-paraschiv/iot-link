@@ -5,6 +5,11 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Security
+- **Wi-Fi Provisioning**: documented the plaintext-credential threat model in `GATT_SPEC.md` — the provisioning exchange has no encryption, key exchange, or peripheral authentication, so a BLE sniffer in range can capture credentials and an unauthenticated central can write its own. Recorded as a deliberate, documented PoC trade-off (decision: document-and-defer) rather than an oversight; real mitigation is deferred to a future encrypted-provisioning spec revision.
+
 ## [1.0.1] - 2026-07-16
 
 ### Fixed
