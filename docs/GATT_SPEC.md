@@ -80,6 +80,35 @@ button). This lets the app's control reflect the device's true state without pol
 
 ---
 
+## 🔓 Threat Model
+
+The provisioning exchange (and the profile generally) has no encryption, key exchange,
+or authentication layer. This is an accepted trade-off for a proof-of-concept — it is
+recorded here so it is a deliberate, documented decision rather than an oversight.
+
+* **Credentials cross the air in plaintext.** The provisioning packet (§1) is
+  length-prefixed UTF-8 with no encryption. Any BLE sniffer in radio range can capture
+  the home network's SSID and password during provisioning.
+* **The ATT link is never encrypted.** Neither side requires BLE pairing/bonding: the
+  peripheral declares every characteristic without `.writeEncryptionRequired` /
+  `.notifyEncryptionRequired`, and the central never triggers a pairing flow.
+* **There is no authorized-client concept.** Any central in range can connect first and
+  write its own credentials, toggle the LED, or read telemetry — the peripheral accepts
+  writes from whichever central gets there first.
+* **The peripheral's identity is not verified.** The central only checks the advertised
+  service UUID (`SmartDeviceService`, §GATT Profile Overview); it has no way to
+  distinguish the real device from a spoofed peripheral advertising the same UUID to
+  harvest credentials.
+
+**Decision — document and defer.** The provisioning characteristic stays plain
+`.writeable` rather than requiring BLE pairing (`.writeEncryptionRequired` /
+`.notifyEncryptionRequired`). Pairing alone would not authenticate the peripheral either,
+so it would add demo-UX friction (a system pairing prompt on every fresh provision)
+without closing the actual gap. Real mitigation — encrypted key exchange and an
+authenticated peripheral — is deferred to a future encrypted-provisioning spec revision.
+
+---
+
 ## 💻 Swift Serialization & Deserialization Reference
 
 Here are Swift snippets demonstrating parsing and writing these exact byte structures safely.
